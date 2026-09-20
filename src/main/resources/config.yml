@@ -1,0 +1,174 @@
+# ---------------------------------------------------------------------------
+# PolaroidHomes
+#
+# EssentialsX stays the owner of homes and of home limits. This plugin never
+# stores a limit and never grants one: it reads whatever EssentialsX resolves
+# for the player from its own `sethome-multiple` section and the matching
+# `essentials.sethome.multiple.<group>` permissions. To give a rank more homes,
+# edit EssentialsX's config, not this one.
+#
+# This plugin owns exactly two things: the icon chosen for each home, and the
+# effect played when a home teleport starts and arrives.
+# ---------------------------------------------------------------------------
+
+# Language file loaded from lang/messages_<language>.yml. Any key missing from
+# that file falls back to the English one shipped inside the jar, so a partial
+# translation never shows a raw key to a player.
+language: en
+
+gui:
+  # Rows of the menu, 1-6. The last row is reserved for navigation chrome
+  # (previous page, close, next page), so the usable area is (rows - 1) * 9.
+  rows: 6
+
+  # Hard ceiling on how many home slots are drawn across all pages of one view
+  # before paging kicks in, and the reason a misconfigured EssentialsX tier
+  # cannot break the menu. A server that defines `sethome-multiple.vip: 9999`
+  # (or an "unlimited" style value) would otherwise ask this plugin to render
+  # 9999 slots. The grid is sized as:
+  #
+  #     visibleSlots = min(highest configured EssentialsX tier, max-displayed-slots)
+  #
+  # Bukkit tops out at 54 slots per window; 45 leaves the bottom row free for
+  # the navigation chrome. Raising this above 45 with rows: 6 will silently be
+  # clamped back down to the usable area.
+  max-displayed-slots: 45
+
+  # Played once for any click that does something. Buttons that do nothing stay
+  # silent on purpose — a sound per click turns a menu into a slot machine.
+  # Set to '' to disable sound entirely.
+  click-sound: UI_BUTTON_CLICK
+  click-sound-volume: 0.6
+  click-sound-pitch: 1.2
+
+  # Item shown for a home that has no icon chosen yet.
+  default-icon: LIGHT_BLUE_BED
+
+  # Item shown for an empty slot the player has already unlocked. Clicking it
+  # suggests /sethome in chat.
+  empty-slot-icon: LIME_STAINED_GLASS_PANE
+
+  # Item shown for a slot the player has not unlocked. Its lore names the first
+  # EssentialsX group whose limit would cover that slot.
+  locked-slot-icon: IRON_BARS
+
+  # Filler behind everything. hide-tooltip matters: an empty tooltip box
+  # trailing the cursor looks broken.
+  filler-icon: BLACK_STAINED_GLASS_PANE
+
+  # Icons offered in the icon picker. Each entry is an item reference resolved
+  # by the item layer, which accepts either separator (`prefix:id` or
+  # `prefix-id`):
+  #
+  #   DIAMOND_BLOCK            a vanilla material
+  #   nexo:my_item             Nexo
+  #   itemsadder:suite:my_item ItemsAdder
+  #   oraxen:my_item           Oraxen
+  #   headdatabase:12345       HeadDatabase
+  #   head:Notch               a player's head, no dependency
+  #   texture:<hash>           a head from a textures.minecraft.net hash
+  #   basehead:<base64>        a head from a raw base64 textures value
+  #
+  # A reference whose plugin is not installed, or whose id does not exist,
+  # simply does not appear in the picker. It is never an error.
+  icon-choices:
+    - LIGHT_BLUE_BED
+    - RED_BED
+    - YELLOW_BED
+    - GREEN_BED
+    - PURPLE_BED
+    - OAK_DOOR
+    - CRAFTING_TABLE
+    - FURNACE
+    - CHEST
+    - ENDER_CHEST
+    - ANVIL
+    - BREWING_STAND
+    - ENCHANTING_TABLE
+    - BEACON
+    - LANTERN
+    - CAMPFIRE
+    - BOOKSHELF
+    - FLOWER_POT
+    - DIAMOND_BLOCK
+    - EMERALD_BLOCK
+    - GOLD_BLOCK
+    - NETHERITE_BLOCK
+    - GRASS_BLOCK
+    - SAND
+    - SNOW_BLOCK
+    - ICE
+    - NETHERRACK
+    - END_STONE
+    - WATER_BUCKET
+    - LAVA_BUCKET
+    - COMPASS
+    - CLOCK
+    - MAP
+    - PAINTING
+    - ITEM_FRAME
+    - TORCH
+
+teleport-effects:
+  # model-engine | particles | none
+  #
+  # model-engine plays a declared Model Engine animation on an invisible marker
+  # entity at the player's feet. particles draws a vanilla particle shape — no
+  # dependency. none disables effects and leaves the EssentialsX warmup alone.
+  mode: particles
+
+  # Used when mode is model-engine but Model Engine is not installed or failed
+  # to load. Accepts particles or none.
+  fallback: particles
+
+  # --- Why duration is declared here and not detected ------------------------
+  # Model Engine's AnimationHandler.playAnimation(...) does not return the
+  # animation's length, and the API exposes no duration getter anywhere. The
+  # only runtime signal is hasFinishedAllAnimations(), which can only be polled
+  # after the fact. So the duration a server owner puts here is what the plugin
+  # uses to stretch the EssentialsX teleport warmup, guaranteeing the animation
+  # is seen in full before the player is moved.
+  #
+  # TODO (v2): support `duration: auto`, polling hasFinishedAllAnimations() on a
+  # short repeating task with a hard timeout ceiling, so a mistyped duration
+  # cannot strand a player in a warmup forever.
+  # ---------------------------------------------------------------------------
+
+  # Plays where the player is standing, before the teleport. Its duration also
+  # becomes the EssentialsX warmup for home teleports, so the effect finishes
+  # before the player leaves. Set duration to 0 to keep the server's own warmup.
+  entry:
+    # Model Engine model id and animation id, used only when mode is model-engine.
+    model: "polaroid_warp"
+    animation: "warp_out"
+    # Seconds. Also the teleport warmup, see the note above.
+    duration: 2.0
+    # Used when the effective mode is particles.
+    particle: PORTAL
+    particle-count: 120
+    # Radius in blocks of the particle ring drawn around the player.
+    particle-radius: 1.0
+
+  # Played at the destination, right after the player arrives. EssentialsX has
+  # no post-teleport event, so the plugin fires this itself on the tick after
+  # the move completes.
+  arrival:
+    model: "polaroid_warp"
+    animation: "warp_in"
+    duration: 1.5
+    particle: END_ROD
+    particle-count: 80
+    particle-radius: 1.0
+
+  # Safety ceiling, in seconds, for how long a Model Engine marker entity may
+  # live before it is removed regardless of the animation state. A marker that
+  # outlives its animation is a ghost entity that accumulates until restart.
+  max-effect-seconds: 10.0
+
+storage:
+  # yaml is the only backend in this release. The storage layer sits behind an
+  # interface so a SQL backend can be added without touching the GUI.
+  type: yaml
+  # How often, in seconds, pending icon changes are flushed to disk. Icons are
+  # also flushed on disable, so nothing is lost on a clean shutdown.
+  save-interval-seconds: 120

@@ -1,0 +1,60 @@
+name: PolaroidHomes
+version: '${version}'
+main: me.juancayc.polaroidhomes.PolaroidHomesPlugin
+description: EssentialsX homes with a custom-icon GUI and teleport effects.
+author: juancayc
+website: https://github.com/PolaroidStudio/PolaroidHomes
+
+# Minimum Paper API this plugin requires. This is a FLOOR, not a ceiling: a server whose
+# api-version is below this refuses to load the plugin, but any server at or above it
+# (including the year.release line, e.g. 26.2) loads it fine.
+api-version: '1.21'
+
+# Teleport effects spawn and remove a marker entity in the destination region. Every one of
+# those calls is routed through the region scheduler, so the plugin is region-thread correct.
+folia-supported: true
+
+dependencies:
+  server:
+    Essentials:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    ModelEngine:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    Nexo:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    ItemsAdder:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    Oraxen:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    HeadDatabase:
+      load: BEFORE
+      required: false
+      join-classpath: true
+
+commands:
+  homes:
+    description: Open the homes menu.
+    usage: /homes [player|reload|help]
+    aliases: [phomes, homemenu]
+    permission: polaroidhomes.use
+
+permissions:
+  polaroidhomes.use:
+    description: Open the homes menu and teleport from it.
+    default: true
+  polaroidhomes.icon:
+    description: Change the icon of your own homes.
+    default: true
+  polaroidhomes.admin:
+    description: Reload the configuration and open another player's menu.
+    default: op

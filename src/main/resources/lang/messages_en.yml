@@ -1,0 +1,133 @@
+version: 1
+# Base language file. Copy to messages_<lang>.yml to translate.
+# Missing keys fall back to this file automatically (setDefaults), so a partial translation
+# never shows a raw key to a player. Keep this file complete.
+#
+# All text is MiniMessage: https://docs.advntr.dev/minimessage/format.html
+# A key is EITHER a plain string, OR a {text, hover, click} section.
+# Click tokens: [NONE] · [RUN_COMMAND]/[EXECUTE] /cmd · [SUGGEST_COMMAND]/[SUGGEST] /cmd ·
+#               [OPEN_URL]/[URL] http... · [COPY] text
+# Do NOT put the plugin name, author or version here — those are constants, not translations.
+#
+# The prefix is composed in code (prefix + message), so never write <prefix> inside a message
+# value: nothing resolves that tag and it would print literally.
+
+# The Polaroid banner. The POLAROID gradient is the brand and should not change; the plugin
+# name after it is the only part meant to be restyled.
+prefix: "<b><#eb4b30>PO</#eb4b30><#f3842c>LA</#f3842c><#f2c42f>RO</#f2c42f><#95d027>ID</#95d027> <#289bd0>HOMES</#289bd0> <#315a7a>┇</b> "
+
+general:
+  no_permission: "<#eb4b30>You do not have permission to do this."
+  players_only: "<#eb4b30>Only a player can use this command."
+  player_not_found: "<#eb4b30>Player <#f2c42f>%player%<#eb4b30> was not found."
+  reloaded: "<#95d027>Configuration reloaded."
+  essentials_missing: "<#eb4b30>EssentialsX is not available, so homes cannot be read."
+
+homes:
+  none: "<#E9FDFB>You have no homes yet. Use <#f2c42f>/sethome <name><#E9FDFB> to set one."
+  unknown: "<#eb4b30>You have no home called <#f2c42f>%home%<#eb4b30>."
+  teleporting: "<#95d027>Teleporting to <#f2c42f>%home%<#95d027>."
+  teleport_failed: "<#eb4b30>The teleport to <#f2c42f>%home%<#eb4b30> could not be completed."
+  slot_locked: "<#eb4b30>That slot is locked. It unlocks at <#f2c42f>%group%<#eb4b30>."
+  slot_empty:
+    text: "<#E9FDFB>That slot is free. Use <#f2c42f>/sethome <name><#E9FDFB> to claim it."
+    hover: "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ᴡʀɪᴛᴇ ᴛʜᴇ ᴄᴏᴍᴍᴀɴᴅ"
+    click: "[SUGGEST_COMMAND] /sethome "
+
+icons:
+  changed: "<#95d027>Icon for <#f2c42f>%home%<#95d027> updated."
+  reset: "<#95d027>Icon for <#f2c42f>%home%<#95d027> reset to the default."
+  unavailable: "<#eb4b30>That icon is not available on this server."
+
+command:
+  header: "<#315a7a>▬▬▬▬▬▬▬▬▬▬▬▬ <#289bd0>ʜᴏᴍᴇs <#315a7a>▬▬▬▬▬▬▬▬▬▬▬▬"
+  help_open:
+    text: "<#f2c42f>▸ <#E9FDFB>/homes <#315a7a>— open your homes menu"
+    hover: "<#315a7a>Permission: <#E9FDFB>polaroidhomes.use"
+    click: "[RUN_COMMAND] /homes"
+  help_reload:
+    text: "<#f2c42f>▸ <#E9FDFB>/homes reload <#315a7a>— reload the configuration"
+    hover: "<#315a7a>Permission: <#E9FDFB>polaroidhomes.admin"
+    click: "[SUGGEST_COMMAND] /homes reload"
+  help_open_other:
+    text: "<#f2c42f>▸ <#E9FDFB>/homes <player> <#315a7a>— open another player's menu"
+    hover: "<#315a7a>Permission: <#E9FDFB>polaroidhomes.admin"
+    click: "[SUGGEST_COMMAND] /homes "
+
+# --- Menu text -------------------------------------------------------------
+# Titles are dark grey and bold on purpose: a title is a label on the window,
+# not a place to be loud.
+menu:
+  homes:
+    title: "<dark_gray><b>ʏᴏᴜʀ ʜᴏᴍᴇs"
+    # Title used when an admin opens somebody else's menu.
+    title_other: "<dark_gray><b>%player%'s ʜᴏᴍᴇs"
+    home:
+      name: "<#289bd0>%home%"
+      lore:
+        - "<#95d027> • ᴡᴏʀʟᴅ: <#E9FDFB>%world%"
+        - "<#cd80f7> • x: <#E9FDFB>%x% <#cd80f7>ʏ: <#E9FDFB>%y% <#cd80f7>ᴢ: <#E9FDFB>%z%"
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ᴛᴇʟᴇᴘᴏʀᴛ"
+        - "<#95d027>▸ sʜɪғᴛ-ᴄʟɪᴄᴋ ᴛᴏ ᴄʜᴀɴɢᴇ ɪᴄᴏɴ"
+    empty:
+      name: "<#f2c42f>ғʀᴇᴇ sʟᴏᴛ"
+      lore:
+        - "<#E9FDFB>Nothing is set here yet."
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ sᴇᴛ ᴀ ʜᴏᴍᴇ"
+    locked:
+      name: "<#9b336e>ʟᴏᴄᴋᴇᴅ sʟᴏᴛ"
+      lore:
+        - "<#E9FDFB>Unlocks at <#b6c1ec>%group%"
+        - ""
+        - "<#315a7a>Ranks are managed by EssentialsX."
+    filler:
+      name: ""
+    previous_page:
+      name: "<#f2c42f>ᴘʀᴇᴠɪᴏᴜs ᴘᴀɢᴇ"
+      lore:
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ɢᴏ ʙᴀᴄᴋ"
+    next_page:
+      name: "<#f2c42f>ɴᴇxᴛ ᴘᴀɢᴇ"
+      lore:
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ɢᴏ ғᴏʀᴡᴀʀᴅ"
+    close:
+      name: "<#eb4b30>ᴄʟᴏsᴇ"
+      lore:
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ᴄʟᴏsᴇ"
+    info:
+      name: "<#289bd0>ʜᴏᴍᴇs <#6f6085>(%used%/%limit%)"
+      lore:
+        - "<#E9FDFB>Page <#b6c1ec>%page%<#E9FDFB> of <#b6c1ec>%pages%"
+        - ""
+        - "<#315a7a>Your limit comes from EssentialsX."
+  icons:
+    title: "<dark_gray><b>ɪᴄᴏɴ ғᴏʀ %home%"
+    choice:
+      name: "<#22e8bc>ᴄʜᴏᴏsᴇ"
+      lore:
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ᴜsᴇ ᴛʜɪs ɪᴄᴏɴ"
+    selected:
+      name: "<#95d027>ɪɴ ᴜsᴇ"
+      lore:
+        - "<#E9FDFB>This is the current icon."
+    reset:
+      name: "<#f2c42f>ʀᴇsᴇᴛ ɪᴄᴏɴ"
+      lore:
+        - "<#E9FDFB>Go back to the default icon."
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ʀᴇsᴇᴛ"
+    back:
+      name: "<#f2c42f>ʙᴀᴄᴋ"
+      lore:
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ɢᴏ ʙᴀᴄᴋ"
+
+status:
+  unlimited: "<#95d027>unlimited"
+  none: "<#315a7a>None"
