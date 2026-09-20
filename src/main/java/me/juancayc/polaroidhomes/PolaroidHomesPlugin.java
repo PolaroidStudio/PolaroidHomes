@@ -1,5 +1,6 @@
 package me.juancayc.polaroidhomes;
 
+import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import me.juancayc.polaroidhomes.command.HomesCommand;
 import me.juancayc.polaroidhomes.config.PluginConfig;
 import me.juancayc.polaroidhomes.effect.ModelEngineEffect;
@@ -23,13 +24,13 @@ import me.juancayc.polaroidhomes.text.ColorFormats;
 import me.juancayc.polaroidhomes.text.MessageService;
 import me.juancayc.polaroidhomes.text.MiniMessageFactory;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.command.PluginCommand;
 import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.io.File;
+import java.util.List;
 
 /** Entry point. Wires the services, registers the listeners and owns their lifecycle. */
 public final class PolaroidHomesPlugin extends JavaPlugin {
@@ -127,15 +128,23 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
         }
     }
 
+    /**
+     * Registers {@code /homes} through the COMMANDS lifecycle event.
+     *
+     * <p>Paper plugins cannot declare commands in {@code paper-plugin.yml}; that file has no
+     * {@code commands:} section at all, and {@code getCommand()} throws
+     * {@code UnsupportedOperationException} during startup rather than returning null. So the
+     * label, description and aliases that would have lived in YAML are passed here instead, and
+     * this is the single source of truth for them.
+     */
     private void registerCommand() {
-        PluginCommand command = getCommand("homes");
-        if (command == null) {
-            getLogger().severe("The /homes command is missing from paper-plugin.yml.");
-            return;
-        }
-        HomesCommand executor = new HomesCommand(this);
-        command.setExecutor(executor);
-        command.setTabCompleter(executor);
+        HomesCommand command = new HomesCommand(this);
+        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
+                event.registrar().register(
+                        "homes",
+                        "Open the homes menu.",
+                        List.of("phomes", "homemenu"),
+                        command));
     }
 
     private void scheduleSaves() {

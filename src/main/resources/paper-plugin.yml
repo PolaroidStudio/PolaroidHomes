@@ -41,12 +41,10 @@ dependencies:
       required: false
       join-classpath: true
 
-commands:
-  homes:
-    description: Open the homes menu.
-    usage: /homes [player|reload|help]
-    aliases: [phomes, homemenu]
-    permission: polaroidhomes.use
+# No `commands:` section, deliberately: Paper plugins do not support YAML command declarations.
+# /homes, its aliases and its description are registered in code through the COMMANDS lifecycle
+# event — see PolaroidHomesPlugin#registerCommand(). Declaring them here would be silently ignored
+# and getCommand() would throw on enable.
 
 permissions:
   polaroidhomes.use:

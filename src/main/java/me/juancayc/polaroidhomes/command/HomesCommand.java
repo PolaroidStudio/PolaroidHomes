@@ -1,22 +1,31 @@
 package me.juancayc.polaroidhomes.command;
 
+import io.papermc.paper.command.brigadier.BasicCommand;
+import io.papermc.paper.command.brigadier.CommandSourceStack;
 import me.juancayc.polaroidhomes.PolaroidHomesPlugin;
 import me.juancayc.polaroidhomes.text.MessageService;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
-import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 
-/** {@code /homes}, {@code /homes reload}, {@code /homes <player>}. */
-public final class HomesCommand implements CommandExecutor, TabCompleter {
+/**
+ * {@code /homes}, {@code /homes reload}, {@code /homes <player>}.
+ *
+ * <p>A {@link BasicCommand}, not a {@code CommandExecutor}: this is a Paper plugin, and Paper
+ * plugins cannot declare commands in {@code paper-plugin.yml} at all. Calling
+ * {@code JavaPlugin#getCommand} from one throws {@code UnsupportedOperationException} on enable,
+ * so registration goes through the COMMANDS lifecycle event instead — see
+ * {@code PolaroidHomesPlugin#registerCommand()}.
+ */
+public final class HomesCommand implements BasicCommand {
 
     private final PolaroidHomesPlugin plugin;
 
@@ -25,44 +34,46 @@ public final class HomesCommand implements CommandExecutor, TabCompleter {
     }
 
     @Override
-    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
-                             @NotNull String label, @NotNull String[] args) {
+    public void execute(@NotNull CommandSourceStack source, @NotNull String[] args) {
+        // getExecutor() is the entity that ran it; getSender() is who it is attributed to. For a
+        // player-facing menu command the executor is the one whose screen must open.
+        CommandSender sender = source.getExecutor() != null ? source.getExecutor() : source.getSender();
         MessageService messages = plugin.messages();
 
         if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
             if (!sender.hasPermission("polaroidhomes.admin")) {
                 messages.send(sender, "general.no_permission");
-                return true;
+                return;
             }
             plugin.reloadEverything();
             // Re-read after the reload, because the message service itself was rebuilt.
             plugin.messages().send(sender, "general.reloaded");
-            return true;
+            return;
         }
 
         if (args.length > 0 && args[0].equalsIgnoreCase("help")) {
             sendHelp(sender);
-            return true;
+            return;
         }
 
         if (!(sender instanceof Player player)) {
             messages.send(sender, "general.players_only");
-            return true;
+            return;
         }
         if (!player.hasPermission("polaroidhomes.use")) {
             messages.send(player, "general.no_permission");
-            return true;
+            return;
         }
         if (!plugin.essentials().isAvailable()) {
             messages.send(player, "general.essentials_missing");
-            return true;
+            return;
         }
 
         OfflinePlayer target = player;
         if (args.length > 0) {
             if (!player.hasPermission("polaroidhomes.admin")) {
                 messages.send(player, "general.no_permission");
-                return true;
+                return;
             }
             // Only an online player is accepted: home limits resolve through Bukkit permissions,
             // which are not reliably available for somebody who is not connected, and a menu built
@@ -71,13 +82,12 @@ public final class HomesCommand implements CommandExecutor, TabCompleter {
             if (other == null) {
                 messages.send(player, "general.player_not_found",
                         "%player%", MessageService.escape(args[0]));
-                return true;
+                return;
             }
             target = other;
         }
 
         plugin.openHomesMenu(player, target);
-        return true;
     }
 
     private void sendHelp(CommandSender sender) {
@@ -92,9 +102,16 @@ public final class HomesCommand implements CommandExecutor, TabCompleter {
         }
     }
 
+    /** Gates the whole command, so it never appears in a client's tab list without permission. */
     @Override
-    public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
-                                      @NotNull String label, @NotNull String[] args) {
+    public @Nullable String permission() {
+        return "polaroidhomes.use";
+    }
+
+    @Override
+    public @NotNull Collection<String> suggest(@NotNull CommandSourceStack source,
+                                               @NotNull String[] args) {
+        CommandSender sender = source.getExecutor() != null ? source.getExecutor() : source.getSender();
         if (args.length != 1) {
             return List.of();
         }
