@@ -65,9 +65,24 @@ dependencies {
     compileOnly("io.th0rgal:oraxen:1.190.0")
     compileOnly("com.arcaniax:HeadDatabase-API:1.3.2")
 
+    // Database libraries. Never shaded: the Paper PluginLoader fetches them at load time (see
+    // PluginLibraryLoader), so the server owns exactly one copy of each driver.
+    compileOnly("com.zaxxer:HikariCP:7.0.2")
+    compileOnly("org.xerial:sqlite-jdbc:3.50.3.0")
+    compileOnly("com.mysql:mysql-connector-j:9.3.0")
+
+    // compileOnly does not reach the test classpath, and the tests need Bukkit's
+    // YamlConfiguration (config migration) and the JDBC drivers (SqlIconStorage) at runtime.
+    testImplementation("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
+
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+    // Tests exercise SqlIconStorage against a real temp-file SQLite database, so the driver and
+    // the pool must be on the test classpath even though the jar never carries them.
+    testImplementation("com.zaxxer:HikariCP:7.0.2")
+    testImplementation("org.xerial:sqlite-jdbc:3.50.3.0")
 }
 
 tasks.withType<JavaCompile> {

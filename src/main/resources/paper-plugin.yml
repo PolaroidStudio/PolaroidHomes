@@ -1,6 +1,9 @@
 name: PolaroidHomes
 version: '${version}'
 main: me.juancayc.polaroidhomes.PolaroidHomesPlugin
+# Paper ignores Spigot's `libraries:` key entirely. The JDBC drivers and the pool are
+# fetched by this loader instead, which is the only mechanism Paper honours.
+loader: me.juancayc.polaroidhomes.PluginLibraryLoader
 description: EssentialsX homes with a custom-icon GUI and teleport effects.
 author: juancayc
 website: https://github.com/PolaroidStudio/PolaroidHomes

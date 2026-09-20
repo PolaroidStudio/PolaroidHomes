@@ -1,4 +1,6 @@
 version: 1
+# Schema version of this file, migrated forward automatically on enable. Do not edit by hand.
+config-version: 1
 # Base language file. Copy to messages_<lang>.yml to translate.
 # Missing keys fall back to this file automatically (setDefaults), so a partial translation
 # never shows a raw key to a player. Keep this file complete.

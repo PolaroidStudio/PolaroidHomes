@@ -144,12 +144,52 @@ that configured a longer teleport delay did so deliberately.
 A `duration: auto` mode — polling `hasFinishedAllAnimations()` with a hard timeout ceiling — is
 noted in the source as a possible future addition.
 
-### `storage`
+### `icons`
 
 | Key | Meaning |
 |---|---|
-| `type` | `yaml` is the only backend in this release. The storage layer sits behind an interface so a SQL backend can be added without touching the menu. |
-| `save-interval-seconds` | How often pending icon changes are written. Icons are also written on disable. |
+| `save-interval-seconds` | How often pending icon changes are written to the database. Icons are also written on disable. |
+
+Which database that is lives in `data.yml`, not here, so reloading the menu configuration can
+never imply reopening a connection pool.
+
+## `data.yml`
+
+Icons are stored in SQL. SQLite is the default and needs no setup; MySQL is for several servers
+sharing one icon store.
+
+| Key | Meaning |
+|---|---|
+| `type` | `sqlite` or `mysql`. Anything unrecognised falls back to `sqlite`. |
+| `sqlite.file` | File name only. Always created at `plugins/PolaroidHomes/data/homes.db`. |
+| `mysql.host`, `mysql.port`, `mysql.database`, `mysql.username`, `mysql.password` | Connection details. |
+| `mysql.pool-size` | Connections for MySQL. SQLite is always 1: it has a single writer, so extra connections only queue on the write lock. |
+
+The JDBC drivers and the connection pool are **not** bundled in the jar. Paper downloads them at
+load time through the plugin loader, so the server keeps exactly one copy of each driver.
+
+Changing `type`, the SQLite file, or the MySQL host or database needs a **full restart**. A reload
+that sees a different backend keeps the open pool and logs a warning: swapping a live pool would
+strand in-flight writes, and the in-memory cache in front of it was filled from the old one.
+
+An existing `icons.yml` from an earlier release is imported into the database automatically on the
+first enable. The original is renamed to `icons.yml.migrated` rather than deleted, and the number
+of imported rows is logged.
+
+## Configuration versioning
+
+Every shipped YAML carries a `config-version`. On enable the plugin compares it against the version
+the jar ships and, when the file is older, migrates it forward:
+
+- The original is copied to `<name>.yml.bak-v<old version>` first.
+- Keys the new version adds arrive with their defaults; keys that moved are carried across with the
+  value you set; keys that no longer exist are dropped.
+- Everything you customised is left exactly as it was — the file is never replaced by the default.
+- Comments shipped with the plugin are restored after the rewrite. Comments you wrote yourself are
+  not recoverable, which is why the backup is written unconditionally.
+
+A file **newer** than the jar (you downgraded the plugin) is refused: the plugin logs a warning and
+leaves it untouched rather than migrating it backwards and dropping settings it does not know.
 
 ## Commands
 

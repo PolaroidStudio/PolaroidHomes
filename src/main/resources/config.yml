@@ -11,6 +11,12 @@
 # effect played when a home teleport starts and arrives.
 # ---------------------------------------------------------------------------
 
+# Schema version of this file. The plugin migrates older files forward on enable,
+# preserving every value you edited, and backs the original up first. Do not edit
+# this by hand: lowering it re-runs migrations, raising it makes the plugin refuse
+# to touch the file.
+config-version: 1
+
 # Language file loaded from lang/messages_<language>.yml. Any key missing from
 # that file falls back to the English one shipped inside the jar, so a partial
 # translation never shows a raw key to a player.
@@ -165,10 +171,11 @@ teleport-effects:
   # outlives its animation is a ghost entity that accumulates until restart.
   max-effect-seconds: 10.0
 
-storage:
-  # yaml is the only backend in this release. The storage layer sits behind an
-  # interface so a SQL backend can be added without touching the GUI.
-  type: yaml
-  # How often, in seconds, pending icon changes are flushed to disk. Icons are
-  # also flushed on disable, so nothing is lost on a clean shutdown.
+icons:
+  # How often, in seconds, pending icon changes are written to the database.
+  # Icons are also flushed on disable, so nothing is lost on a clean shutdown.
+  #
+  # Which database that is — sqlite or mysql — is configured in data.yml, not
+  # here. Backend settings are deliberately kept out of this file so that
+  # reloading the GUI configuration can never imply reopening a connection pool.
   save-interval-seconds: 120

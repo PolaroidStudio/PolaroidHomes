@@ -1,0 +1,23 @@
+# Storage backend for home icons.
+#
+# Changing type, the sqlite file, or the MySQL host/database needs a full restart.
+# /homes reload only re-reads YAML. It does not reopen the database.
+
+# sqlite — local file under the data/ folder. Default. One server.
+# mysql  — remote MySQL or MariaDB. Several servers sharing one icon store.
+
+config-version: 1
+
+type: sqlite
+
+sqlite:
+  # File name only. Always created at plugins/PolaroidHomes/data/<file>
+  file: homes.db
+
+mysql:
+  host: 127.0.0.1
+  port: 3306
+  database: polaroidhomes
+  username: root
+  password: ''
+  pool-size: 8

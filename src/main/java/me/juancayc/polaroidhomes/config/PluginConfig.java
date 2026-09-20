@@ -72,7 +72,7 @@ public final class PluginConfig {
         this.maxEffectSeconds = Math.max(1.0D,
                 config.getDouble("teleport-effects.max-effect-seconds", 10.0D));
 
-        long intervalSeconds = Math.max(5L, config.getLong("storage.save-interval-seconds", 120L));
+        long intervalSeconds = Math.max(5L, config.getLong("icons.save-interval-seconds", 120L));
         this.saveIntervalTicks = intervalSeconds * 20L;
     }
 
