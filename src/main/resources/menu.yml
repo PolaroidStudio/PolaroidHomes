@@ -1,0 +1,206 @@
+# ---------------------------------------------------------------------------
+# PolaroidHomes — menu layout
+#
+# This file decides what every menu looks like and where each button sits.
+# Both screens are described the same way: a picture of the window drawn with
+# characters, plus one entry per character saying what that character is.
+#
+# --- How a layout works ----------------------------------------------------
+#
+# `rows` is the picture. One string per row of the window, 1 to 6 rows,
+# and every string is exactly 9 characters long — that is the width Minecraft
+# gives a chest window, and the plugin refuses a row of any other length.
+#
+#     rows:
+#       - "#########"     row 0, slots 0-8
+#       - "#HHHHHHH#"     row 1, slots 9-17
+#       - "<###I###>"     row 2, slots 18-26
+#
+# `elements` says what each character means. The key is the single character,
+# and `type` is the behaviour:
+#
+#     elements:
+#       '#': { type: filler, item: BLACK_STAINED_GLASS_PANE }
+#       'H': { type: home-slot }
+#       '<': { type: previous-page, item: ARROW }
+#
+# A space is always an empty slot: no item, no click, nothing to declare.
+# Use it wherever you want the window to show through.
+#
+# --- Element types ---------------------------------------------------------
+#
+# Homes menu:
+#   home-slot      where the homes go. Filled in reading order — left to
+#                  right, top to bottom — with your homes, then free slots,
+#                  then locked slots. At least one is required.
+#   previous-page  goes back a page. Drawn only when there is one.
+#   next-page      goes forward a page. Drawn only when there is one.
+#   info           the counter: homes used, your limit, the page number.
+#                  It is a label and does nothing when clicked.
+#   close          closes the window.
+#   filler         background. Does nothing when clicked, and its tooltip is
+#                  hidden, because an empty tooltip box looks broken.
+#
+# Icon picker:
+#   icon-slot      where the icon choices go, the picker's home-slot.
+#   previous-page  / next-page  as above.
+#   icon-reset     puts the home back on the default icon.
+#   icon-back      returns to the homes grid.
+#   filler         as above.
+#
+# --- What each element can declare -----------------------------------------
+#
+#   type                 required. One of the names above.
+#   item                 the item to show. Any reference the plugin's item
+#                        layer understands (see config.yml's icon-choices for
+#                        the full list): a vanilla material, nexo:my_item,
+#                        itemsadder:suite:my_item, oraxen:my_item,
+#                        headdatabase:12345, head:Notch, texture:<hash>,
+#                        basehead:<base64>. A reference that cannot be
+#                        resolved — its plugin is missing, or the id is a typo
+#                        — falls back to a safe vanilla item and is reported
+#                        once in the console. The menu still opens.
+#   name                 MiniMessage display name. Leave it out to keep the
+#                        name from lang/messages_<language>.yml, which is
+#                        where translations live.
+#   lore                 MiniMessage lore lines. Leave it out for the same
+#                        reason. A `""` line is a blank line.
+#   custom-model-data    a number, for a resource pack that keys models off it.
+#   glow                 true adds the enchantment glint without enchanting.
+#
+# Placeholders available in a name or lore: %home%, %world%, %x%, %y%, %z% on
+# a home slot; %used%, %limit%, %page%, %pages% on info; %group% on a locked
+# slot.
+#
+# --- If you break it -------------------------------------------------------
+#
+# The plugin validates this file on startup and on /homes reload. A layout it
+# cannot use is reported in the console — naming the row or the key at fault —
+# and the built-in layout is used for that screen instead. The plugin keeps
+# running and homes keep working; fix the file and run /homes reload.
+#
+# Rejected: more than 6 rows, a row that is not 9 characters, a character with
+# no matching element, no home-slot at all, and a layout that needs to page
+# (max-displayed-slots is larger than one page of home slots) without both
+# paging buttons. Warned about but harmless: an element declared and never
+# placed in a row, and paging buttons on a layout that never pages.
+#
+# --- Reloading -------------------------------------------------------------
+#
+# /homes reload re-reads this file and closes every open menu. A window is
+# sized from its layout when it is built, so an already-open window cannot be
+# resized in place — the new layout applies to the next one opened.
+# ---------------------------------------------------------------------------
+
+# Schema version of this file. The plugin migrates older files forward on
+# enable, preserving every value you edited, and backs the original up first.
+# Do not edit this by hand.
+config-version: 1
+
+# Hard ceiling on how many home slots are drawn across all pages, and the
+# reason a misconfigured EssentialsX tier cannot break the menu. A server that
+# defines `sethome-multiple.vip: 9999` would otherwise ask this plugin to
+# render 9999 slots. The grid is sized as:
+#
+#     visibleSlots = min(highest configured EssentialsX tier, max-displayed-slots)
+#
+# It lives here rather than in config.yml because it only means anything next
+# to the layout below: if you set it higher than one page of home slots, the
+# layout must carry previous-page and next-page buttons, or startup rejects it.
+max-displayed-slots: 45
+
+homes:
+  rows:
+    - "HHHHHHHHH"
+    - "HHHHHHHHH"
+    - "HHHHHHHHH"
+    - "HHHHHHHHH"
+    - "HHHHHHHHH"
+    - "<###I###>"
+  elements:
+    'H':
+      type: home-slot
+      # No item here: a home draws the icon its owner picked, from the icon
+      # store, and config.yml's default-icon when none is picked yet.
+    '#':
+      type: filler
+      item: BLACK_STAINED_GLASS_PANE
+    '<':
+      type: previous-page
+      item: ARROW
+      name: "<#f2c42f>ᴘʀᴇᴠɪᴏᴜs ᴘᴀɢᴇ"
+      lore:
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ɢᴏ ʙᴀᴄᴋ"
+    '>':
+      type: next-page
+      item: ARROW
+      name: "<#f2c42f>ɴᴇxᴛ ᴘᴀɢᴇ"
+      lore:
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ɢᴏ ғᴏʀᴡᴀʀᴅ"
+    'I':
+      type: info
+      item: PAPER
+      name: "<#289bd0>ʜᴏᴍᴇs <#6f6085>(%used%/%limit%)"
+      lore:
+        - "<#E9FDFB>Page <#b6c1ec>%page%<#E9FDFB> of <#b6c1ec>%pages%"
+        - ""
+        - "<#315a7a>Your limit comes from EssentialsX."
+    # A close button is not on the default grid, so that this release draws the
+    # same window earlier ones did. To add one, put a character in a row and
+    # declare it here, for example:
+    #
+    #     'X':
+    #       type: close
+    #       item: BARRIER
+    #       name: "<#eb4b30>ᴄʟᴏsᴇ"
+    #       lore:
+    #         - ""
+    #         - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ᴄʟᴏsᴇ"
+
+icons:
+  rows:
+    - "OOOOOOOOO"
+    - "OOOOOOOOO"
+    - "OOOOOOOOO"
+    - "OOOOOOOOO"
+    - "OOOOOOOOO"
+    - "<##R#B##>"
+  elements:
+    'O':
+      type: icon-slot
+      # No item: each slot shows the choice it offers, from config.yml's
+      # icon-choices list.
+    '#':
+      type: filler
+      item: BLACK_STAINED_GLASS_PANE
+    '<':
+      type: previous-page
+      item: ARROW
+      name: "<#f2c42f>ᴘʀᴇᴠɪᴏᴜs ᴘᴀɢᴇ"
+      lore:
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ɢᴏ ʙᴀᴄᴋ"
+    '>':
+      type: next-page
+      item: ARROW
+      name: "<#f2c42f>ɴᴇxᴛ ᴘᴀɢᴇ"
+      lore:
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ɢᴏ ғᴏʀᴡᴀʀᴅ"
+    'R':
+      type: icon-reset
+      item: BARRIER
+      name: "<#f2c42f>ʀᴇsᴇᴛ ɪᴄᴏɴ"
+      lore:
+        - "<#E9FDFB>Go back to the default icon."
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ʀᴇsᴇᴛ"
+    'B':
+      type: icon-back
+      item: ARROW
+      name: "<#f2c42f>ʙᴀᴄᴋ"
+      lore:
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ɢᴏ ʙᴀᴄᴋ"

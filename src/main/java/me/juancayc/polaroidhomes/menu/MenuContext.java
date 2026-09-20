@@ -1,5 +1,6 @@
 package me.juancayc.polaroidhomes.menu;
 
+import me.juancayc.polaroidhomes.config.MenuConfig;
 import me.juancayc.polaroidhomes.config.PluginConfig;
 import me.juancayc.polaroidhomes.essentials.EssentialsBridge;
 import me.juancayc.polaroidhomes.icon.IconStorage;
@@ -17,6 +18,7 @@ import org.bukkit.plugin.Plugin;
  */
 public record MenuContext(Plugin plugin,
                           PluginConfig config,
+                          MenuConfig menus,
                           MessageService messages,
                           ItemManager itemManager,
                           MenuItems items,

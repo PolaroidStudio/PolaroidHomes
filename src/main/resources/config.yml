@@ -15,31 +15,20 @@
 # preserving every value you edited, and backs the original up first. Do not edit
 # this by hand: lowering it re-runs migrations, raising it makes the plugin refuse
 # to touch the file.
-config-version: 1
+config-version: 2
 
 # Language file loaded from lang/messages_<language>.yml. Any key missing from
 # that file falls back to the English one shipped inside the jar, so a partial
 # translation never shows a raw key to a player.
 language: en
 
+# Where the menus are laid out: which rows exist, which slot holds which
+# button, and how each button looks. That all lives in menu.yml, together with
+# max-displayed-slots, which only means anything relative to a layout. Row
+# count is no longer a number here — it is how many row strings menu.yml
+# declares.
+
 gui:
-  # Rows of the menu, 1-6. The last row is reserved for navigation chrome
-  # (previous page, close, next page), so the usable area is (rows - 1) * 9.
-  rows: 6
-
-  # Hard ceiling on how many home slots are drawn across all pages of one view
-  # before paging kicks in, and the reason a misconfigured EssentialsX tier
-  # cannot break the menu. A server that defines `sethome-multiple.vip: 9999`
-  # (or an "unlimited" style value) would otherwise ask this plugin to render
-  # 9999 slots. The grid is sized as:
-  #
-  #     visibleSlots = min(highest configured EssentialsX tier, max-displayed-slots)
-  #
-  # Bukkit tops out at 54 slots per window; 45 leaves the bottom row free for
-  # the navigation chrome. Raising this above 45 with rows: 6 will silently be
-  # clamped back down to the usable area.
-  max-displayed-slots: 45
-
   # Played once for any click that does something. Buttons that do nothing stay
   # silent on purpose — a sound per click turns a menu into a slot machine.
   # Set to '' to disable sound entirely.

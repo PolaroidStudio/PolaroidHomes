@@ -204,9 +204,31 @@ class ConfigMigratorTest {
     }
 
     @Test
-    void theShippedRegistryTargetsTheBaselineVersion() {
-        assertEquals(1, ConfigMigrations.config().targetVersion());
+    void theShippedRegistryTargetsTheVersionThisJarShips() {
+        // config.yml is at 2: max-displayed-slots moved into menu.yml and gui.rows became the row
+        // strings there. The other files never needed restructuring, so they stay at the baseline.
+        assertEquals(2, ConfigMigrations.config().targetVersion());
+        assertEquals(1, ConfigMigrations.menu().targetVersion());
         assertEquals(1, ConfigMigrations.data().targetVersion());
         assertEquals(1, ConfigMigrations.messages().targetVersion());
+    }
+
+    @Test
+    void theConfigStepDropsTheKeysThatMovedIntoMenuYml() {
+        YamlConfiguration config = defaults("""
+                config-version: 1
+                gui:
+                  rows: 3
+                  max-displayed-slots: 27
+                  default-icon: DIRT
+                """);
+
+        ConfigMigrations.dropMovedMaxDisplayedSlots().apply(config);
+
+        assertFalse(config.contains("gui.max-displayed-slots"),
+                "the moved key must not linger as a setting that quietly stopped working");
+        assertFalse(config.contains("gui.rows"));
+        assertEquals("DIRT", config.getString("gui.default-icon"),
+                "the step must touch nothing the operator still owns");
     }
 }

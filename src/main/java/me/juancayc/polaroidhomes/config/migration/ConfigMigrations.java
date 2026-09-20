@@ -9,7 +9,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 import java.util.logging.Level;
 
 /**
@@ -25,25 +24,90 @@ import java.util.logging.Level;
  *       version it moved away from. See {@link #exampleRenameStep()} for a worked one.</li>
  * </ol>
  *
- * <p>All three files sit at version 1, the baseline this system was introduced at, and no real
- * step is registered yet. The example below is exercised by the unit tests so the machinery is
- * proven before the first real migration depends on it.
+ * <p>config.yml is at version 2: {@code gui.max-displayed-slots} moved into menu.yml, which is
+ * where the layout that gives the cap its meaning now lives. The other files sit at version 1, the
+ * baseline this system was introduced at.
  */
 public final class ConfigMigrations {
 
     /** Baseline. Bump alongside {@code config-version} in the matching resource file. */
-    public static final int CONFIG_VERSION = 1;
+    public static final int CONFIG_VERSION = 2;
     public static final int DATA_VERSION = 1;
     public static final int MESSAGES_VERSION = 1;
+
+    /**
+     * menu.yml's baseline.
+     *
+     * <p>It ships at version 1 because it is a new file: an operator upgrading into this release has
+     * no menu.yml at all until saveResource writes one, and that copy already carries version 1.
+     * What does need moving is {@code gui.max-displayed-slots}, which used to live in config.yml —
+     * see {@link #config()} and {@link #maxDisplayedSlotsToMenu(Plugin)}.
+     */
+    public static final int MENU_VERSION = 1;
 
     private ConfigMigrations() {
     }
 
     public static FileMigration config() {
-        return new FileMigration("config.yml", CONFIG_VERSION);
-        // No step yet: version 1 is the first version this engine ever saw. A pre-versioning
-        // file reads as version 0, and the engine's add-missing-keys pass is all it needs,
-        // since nothing was renamed when config-version was introduced.
+        return new FileMigration("config.yml", CONFIG_VERSION)
+                // gui.max-displayed-slots moved to menu.yml, where the layout that gives the cap
+                // its meaning now lives. The value itself is carried across by
+                // maxDisplayedSlotsToMenu before this step drops the dead key, so an operator who
+                // raised or lowered it keeps their number. gui.rows is dropped outright: the row
+                // strings in menu.yml are the row count now.
+                .step(1, dropMovedMaxDisplayedSlots());
+    }
+
+    public static FileMigration menu() {
+        return new FileMigration("menu.yml", MENU_VERSION);
+    }
+
+    /** Removes the key {@link #maxDisplayedSlotsToMenu} has already copied into menu.yml. */
+    public static MigrationStep dropMovedMaxDisplayedSlots() {
+        return config -> {
+            MigrationStep.remove(config, "gui.max-displayed-slots");
+            // gui.rows is gone rather than moved: menu.yml's row strings are the row count now, and
+            // there is no honest way to translate a number into a layout the operator would
+            // recognise as theirs. Left in place it would read as a setting that quietly stopped
+            // working.
+            MigrationStep.remove(config, "gui.rows");
+        };
+    }
+
+    /**
+     * Copies a pre-existing {@code gui.max-displayed-slots} from config.yml into menu.yml.
+     *
+     * <p>A cross-file move is not something a {@link MigrationStep} can express — a step only sees
+     * the one file it is migrating — so it runs here, before either file's own migration. It writes
+     * only when config.yml still has the key and menu.yml has not been given a value of its own, so
+     * a second enable and an operator who has since edited menu.yml are both left alone.
+     */
+    static void maxDisplayedSlotsToMenu(Plugin plugin) {
+        File source = new File(plugin.getDataFolder(), "config.yml");
+        File target = new File(plugin.getDataFolder(), "menu.yml");
+        if (!source.isFile() || !target.isFile()) {
+            return;
+        }
+        YamlConfiguration from = YamlConfiguration.loadConfiguration(source);
+        if (!from.contains("gui.max-displayed-slots")) {
+            return;
+        }
+        YamlConfiguration to = YamlConfiguration.loadConfiguration(target);
+        int shipped = to.getInt("max-displayed-slots", 45);
+        int configured = from.getInt("gui.max-displayed-slots", shipped);
+        if (configured == shipped) {
+            return;
+        }
+        to.set("max-displayed-slots", configured);
+        try {
+            to.save(target);
+            plugin.getLogger().info("Moved gui.max-displayed-slots (" + configured
+                    + ") from config.yml into menu.yml, where the layout it caps now lives.");
+        } catch (IOException ex) {
+            plugin.getLogger().log(Level.WARNING, "Could not move gui.max-displayed-slots into "
+                    + "menu.yml. Copy the value across by hand; the default is being used until "
+                    + "then.", ex);
+        }
     }
 
     public static FileMigration data() {
@@ -81,7 +145,10 @@ public final class ConfigMigrations {
      * plus its backup are both on disk for the operator.
      */
     public static void runAll(Plugin plugin) {
+        // Before config.yml's own step, which is the one that deletes the old key.
+        maxDisplayedSlotsToMenu(plugin);
         migrate(plugin, "config.yml", config());
+        migrate(plugin, "menu.yml", menu());
         migrate(plugin, "data.yml", data());
         migrate(plugin, "lang/messages_en.yml", messages());
     }

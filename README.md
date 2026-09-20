@@ -59,8 +59,8 @@ Folia is supported.
 
 ## Configuration
 
-Every key below lives in `config.yml`. Every player-facing string lives in
-`lang/messages_<language>.yml` and nowhere else.
+Three files. `config.yml` holds behaviour, `menu.yml` holds the layout of both menus, and every
+player-facing string lives in `lang/messages_<language>.yml` and nowhere else.
 
 ### `language`
 
@@ -71,8 +71,6 @@ inside the jar, so a partial translation degrades key by key instead of showing 
 
 | Key | Meaning |
 |---|---|
-| `rows` | Rows of the window, 1–6. The last row is navigation chrome, so the usable area is `(rows - 1) * 9`. |
-| `max-displayed-slots` | The ceiling on how many home slots are drawn before paging. See below. |
 | `click-sound`, `click-sound-volume`, `click-sound-pitch` | One sound for the whole plugin, played only by buttons that do something. Set the sound to `''` to disable it. |
 | `default-icon` | Drawn for a home whose owner has not picked an icon. |
 | `empty-slot-icon` | Drawn for an unlocked slot with no home in it. |
@@ -80,8 +78,44 @@ inside the jar, so a partial translation degrades key by key instead of showing 
 | `filler-icon` | The background pane. Its tooltip is hidden. |
 | `icon-choices` | The list offered in the picker. |
 
+### `menu.yml`
+
+Where both menus are laid out. Each screen is a picture of the window drawn with characters, plus
+one entry saying what each character is:
+
+```yaml
+homes:
+  rows:
+    - "HHHHHHHHH"
+    - "HHHHHHHHH"
+    - "<###I###>"
+  elements:
+    'H': { type: home-slot }
+    '#': { type: filler, item: BLACK_STAINED_GLASS_PANE }
+    '<': { type: previous-page, item: ARROW, name: "<#f2c42f>ᴘʀᴇᴠɪᴏᴜs ᴘᴀɢᴇ" }
+    '>': { type: next-page, item: ARROW }
+    'I': { type: info, item: PAPER }
+```
+
+One to six rows, every row exactly nine characters. A space is an empty slot and needs no
+declaration. `home-slot` marks where homes go, filled in reading order with homes, then free slots,
+then locked ones. The other types are `previous-page`, `next-page`, `info`, `close` and `filler`
+for the grid, and `icon-slot`, `previous-page`, `next-page`, `icon-reset`, `icon-back` and `filler`
+for the picker. Each element may declare `item` (any reference from the table below), `name`, `lore`,
+`custom-model-data` and `glow`; leaving `name` and `lore` out keeps the text from the language file,
+so translations keep working.
+
+The file is validated on startup and on `/homes reload`. A section it cannot use is reported in the
+console — naming the row or the key at fault — and that screen falls back to the built-in layout.
+The plugin is never disabled over a menu typo. An item reference that cannot be resolved falls back
+to a safe vanilla item and is reported once, so the window still opens.
+
+`/homes reload` closes every open menu, because a window is sized from its layout when it is built
+and cannot be resized in place. The new layout applies to the next window opened.
+
 #### Why `max-displayed-slots` exists
 
+It lives in `menu.yml`, next to the layout it caps, because it only means anything relative to one.
 The grid is sized at the server's maximum, not at the viewer's own limit:
 
 ```
@@ -89,9 +123,12 @@ visibleSlots = min(highest configured EssentialsX tier, max-displayed-slots)
 ```
 
 A server that configures `sethome-multiple.vip: 9999`, or a tier named `unlimited`, would otherwise
-ask the menu to render 9999 slots. Bukkit tops out at 54 per window. The cap is what turns that
-from a crash into a paginated grid, and it is itself clamped to what the configured `rows` can
-actually hold.
+ask the menu to render 9999 slots. Bukkit tops out at 54 per window. The cap turns that into a
+paginated grid — and if you raise it past one page of `home-slot` positions, the layout must carry
+both paging buttons, or startup rejects it and falls back.
+
+Upgrading from an earlier release moves your `gui.max-displayed-slots` into `menu.yml`
+automatically; `gui.rows` is dropped, because the row strings are the row count now.
 
 #### Icon references
 

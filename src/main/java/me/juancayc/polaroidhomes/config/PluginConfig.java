@@ -15,8 +15,6 @@ public final class PluginConfig {
 
     private final Plugin plugin;
 
-    private int rows;
-    private int maxDisplayedSlots;
     private String defaultIcon;
     private String emptySlotIcon;
     private String lockedSlotIcon;
@@ -44,8 +42,6 @@ public final class PluginConfig {
         plugin.reloadConfig();
         FileConfiguration config = plugin.getConfig();
 
-        this.rows = config.getInt("gui.rows", 6);
-        this.maxDisplayedSlots = config.getInt("gui.max-displayed-slots", 45);
         this.defaultIcon = config.getString("gui.default-icon", "LIGHT_BLUE_BED");
         this.emptySlotIcon = config.getString("gui.empty-slot-icon", "LIME_STAINED_GLASS_PANE");
         this.lockedSlotIcon = config.getString("gui.locked-slot-icon", "IRON_BARS");
@@ -93,14 +89,6 @@ public final class PluginConfig {
         } catch (Exception ignored) {
             return null;
         }
-    }
-
-    public int rows() {
-        return rows;
-    }
-
-    public int maxDisplayedSlots() {
-        return maxDisplayedSlots;
     }
 
     public String defaultIcon() {

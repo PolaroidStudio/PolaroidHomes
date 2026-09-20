@@ -3,34 +3,56 @@ package me.juancayc.polaroidhomes.menu;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The grid is sized from a value an operator controls in another plugin's config, so the failure
- * mode here is a server that refuses to open the menu at all. These run headless on every build
- * rather than depending on somebody remembering to try a misconfigured EssentialsX.
+ * The grid is sized from a value an operator controls in another plugin's config, capped by one they
+ * control in menu.yml. The failure mode is a server that refuses to open the menu, or a rank whose
+ * slots silently vanish, so these run headless on every build rather than depending on somebody
+ * remembering to try a misconfigured EssentialsX.
  */
 class GridLayoutTest {
+
+    /** Builds a template from row strings, with the standard character set declared. */
+    private static MenuTemplate template(int maxTotalSlots, String... rows) {
+        Map<Character, MenuElement> types = new LinkedHashMap<>();
+        Map<Character, MenuTemplate.ElementDefinition> definitions = new LinkedHashMap<>();
+        Map<Character, MenuElement> all = Map.of(
+                'H', MenuElement.HOME_SLOT,
+                '#', MenuElement.FILLER,
+                '<', MenuElement.PREVIOUS_PAGE,
+                '>', MenuElement.NEXT_PAGE,
+                'I', MenuElement.INFO);
+        // Only what the rows actually use, so the unused-element warning never fires here and a
+        // failure is always about the sizing rule under test.
+        for (String row : rows) {
+            for (char symbol : row.toCharArray()) {
+                if (all.containsKey(symbol)) {
+                    types.put(symbol, all.get(symbol));
+                    definitions.put(symbol,
+                            new MenuTemplate.ElementDefinition("", null, List.of(), null, false));
+                }
+            }
+        }
+        MenuTemplate.Result result = MenuTemplate.parse(List.of(rows), definitions, types,
+                maxTotalSlots, MenuElement.HOME_SLOT, DefaultMenuTemplates.HOMES_ELEMENTS);
+        assertTrue(result.isValid(), () -> "test fixture is not a valid layout: " + result.errors());
+        return result.template();
+    }
 
     @Test
     @DisplayName("an absurd tier is capped by max-displayed-slots, not honoured")
     void capsAbsurdTier() {
-        GridLayout layout = GridLayout.of(6, 9999, 45);
+        GridLayout layout = GridLayout.of(DefaultMenuTemplates.homes(), 9999, 45);
 
         assertEquals(45, layout.visibleSlots());
         assertEquals(54, layout.inventorySize());
-    }
-
-    @Test
-    @DisplayName("the cap itself cannot exceed the usable area of the window")
-    void capIsClampedToUsableArea() {
-        // An operator who raises max-displayed-slots past what a 6-row window can hold must not get
-        // a grid that promises slots the inventory has no room for.
-        GridLayout layout = GridLayout.of(6, 9999, 500);
-
-        assertEquals(45, layout.visibleSlots());
-        assertTrue(layout.visibleSlots() <= layout.inventorySize() - 9);
+        assertEquals(1, layout.pageCount());
     }
 
     @Test
@@ -38,25 +60,36 @@ class GridLayoutTest {
     void smallTierStillFillsAPage() {
         // Three homes on a six-row window draws forty-five slots, not three: the locked ones are
         // what tell the player a rank exists above them.
-        GridLayout layout = GridLayout.of(6, 3, 45);
+        GridLayout layout = GridLayout.of(DefaultMenuTemplates.homes(), 3, 45);
 
         assertEquals(45, layout.visibleSlots());
         assertEquals(1, layout.pageCount());
     }
 
     @Test
-    @DisplayName("rows are clamped to what Bukkit accepts")
-    void clampsRows() {
-        assertEquals(54, GridLayout.of(99, 10, 45).inventorySize());
-        assertEquals(18, GridLayout.of(1, 10, 45).inventorySize());
+    @DisplayName("a zero or negative tier does not produce an empty window")
+    void nonPositiveTierStillDraws() {
+        GridLayout layout = GridLayout.of(DefaultMenuTemplates.homes(), 0, 45);
+
+        assertEquals(45, layout.visibleSlots());
+        assertEquals(1, layout.pageCount());
+    }
+
+    @Test
+    @DisplayName("the window is sized from the template, not from a separate row count")
+    void windowIsSizedFromTheTemplate() {
+        assertEquals(18, GridLayout.of(template(9, "HHHHHHHHH", "####I####"), 10, 9)
+                .inventorySize());
+        assertEquals(9, GridLayout.of(template(9, "HHHHHHHHH"), 10, 9).inventorySize());
+        assertEquals(54, GridLayout.of(DefaultMenuTemplates.homes(), 10, 45).inventorySize());
     }
 
     @Test
     @DisplayName("paging covers every visible slot exactly once")
     void pagingCoversEverySlot() {
-        // Three rows: eighteen usable slots above the navigation row, so forty visible slots need
-        // three pages, the last of which is short.
-        GridLayout layout = GridLayout.of(3, 40, 45);
+        // Eighteen content slots and forty visible, so three pages, the last of which is short.
+        MenuTemplate template = template(45, "HHHHHHHHH", "HHHHHHHHH", "<###I###>");
+        GridLayout layout = GridLayout.of(template, 40, 45);
 
         assertEquals(18, layout.slotsPerPage());
         assertEquals(40, layout.visibleSlots());
@@ -72,34 +105,29 @@ class GridLayoutTest {
     @Test
     @DisplayName("a page past the end draws nothing rather than a negative count")
     void pastTheEndIsEmpty() {
-        GridLayout layout = GridLayout.of(6, 45, 45);
+        GridLayout layout = GridLayout.of(DefaultMenuTemplates.homes(), 45, 45);
 
         assertEquals(0, layout.slotsOnPage(5));
     }
 
     @Test
-    @DisplayName("navigation slots sit in the last row and never collide")
-    void navigationSlotsAreDistinctAndInTheLastRow() {
-        GridLayout layout = GridLayout.of(6, 45, 45);
-        int firstNavigationSlot = layout.inventorySize() - 9;
+    @DisplayName("a paging template may show more slots in total than one window holds")
+    void aPagingTemplateMayExceedOneWindow() {
+        // Nothing clamps the total to a single window any more: the template was validated to carry
+        // paging buttons, so cutting a rank's slots off here would be the bug, not the safeguard.
+        GridLayout layout = GridLayout.of(template(90, "HHHHHHHHH", "<###I###>"), 90, 90);
 
-        assertTrue(layout.previousPageSlot() >= firstNavigationSlot);
-        assertTrue(layout.nextPageSlot() >= firstNavigationSlot);
-        assertTrue(layout.infoSlot() >= firstNavigationSlot);
-        assertTrue(layout.closeSlot() >= firstNavigationSlot);
-
-        assertTrue(layout.closeSlot() < layout.inventorySize());
-        assertEquals(4, java.util.Set.of(
-                layout.previousPageSlot(),
-                layout.nextPageSlot(),
-                layout.infoSlot(),
-                layout.closeSlot()).size());
+        assertEquals(9, layout.slotsPerPage());
+        assertEquals(90, layout.visibleSlots());
+        assertEquals(10, layout.pageCount());
+        assertEquals(18, layout.inventorySize());
     }
 
     @Test
-    @DisplayName("a zero or negative tier does not produce an empty window")
-    void nonPositiveTierStillDraws() {
-        GridLayout layout = GridLayout.of(6, 0, 45);
+    @DisplayName("a cap below one page still fills the page the operator drew")
+    void aCapBelowOnePageStillFillsThePage() {
+        // Otherwise home slots the operator explicitly placed would render blank forever.
+        GridLayout layout = GridLayout.of(DefaultMenuTemplates.homes(), 60, 10);
 
         assertEquals(45, layout.visibleSlots());
         assertEquals(1, layout.pageCount());

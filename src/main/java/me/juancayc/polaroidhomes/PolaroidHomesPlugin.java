@@ -2,6 +2,7 @@ package me.juancayc.polaroidhomes;
 
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import me.juancayc.polaroidhomes.command.HomesCommand;
+import me.juancayc.polaroidhomes.config.MenuConfig;
 import me.juancayc.polaroidhomes.config.PluginConfig;
 import me.juancayc.polaroidhomes.config.migration.ConfigMigrations;
 import me.juancayc.polaroidhomes.effect.ModelEngineEffect;
@@ -44,6 +45,7 @@ import java.util.logging.Level;
 public final class PolaroidHomesPlugin extends JavaPlugin {
 
     private PluginConfig config;
+    private MenuConfig menus;
     private MessageService messages;
     private EssentialsBridge essentials;
     private DatabaseManager database;
@@ -61,6 +63,7 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
     public void onEnable() {
         saveDefaultConfig();
         saveResource("data.yml", false);
+        saveResource("menu.yml", false);
         // Runs before anything reads a value: a v0 file that has not been brought forward yet
         // would otherwise be read with its old key layout and silently fall back to defaults.
         ConfigMigrations.runAll(this);
@@ -70,6 +73,8 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
         ColorFormats.init(MiniMessageFactory.build());
 
         this.config = new PluginConfig(this);
+        // Read after config.yml so a migrated max-displayed-slots is already on disk in menu.yml.
+        this.menus = new MenuConfig(this);
         this.messages = new MessageService(this);
         this.essentials = new EssentialsBridge(this);
         if (!openStorage()) {
@@ -163,9 +168,9 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
     }
 
     private void rebuildContext() {
-        MenuItems menuItems = new MenuItems(items, messages, marker);
-        this.menuContext = new MenuContext(this, config, messages, items, menuItems, registry,
-                essentials, icons);
+        MenuItems menuItems = new MenuItems(items, messages, marker, getLogger());
+        this.menuContext = new MenuContext(this, config, menus, messages, items, menuItems,
+                registry, essentials, icons);
     }
 
     private void registerListeners() {
@@ -239,6 +244,10 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
         registry.closeAll();
 
         config.reload();
+        // Re-read here, not only on enable: a layout change is the most common reason an operator
+        // runs /homes reload. Every open window was already closed above, so the new template only
+        // ever sizes a window built after this point — an open one cannot be resized in place.
+        menus.reload();
         messages.reload();
         warnIfBackendChanged();
 
