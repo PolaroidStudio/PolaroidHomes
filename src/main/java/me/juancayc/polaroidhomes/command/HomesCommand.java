@@ -56,18 +56,22 @@ public final class HomesCommand implements BasicCommand {
                 messages.send(sender, "general.no_permission");
                 return;
             }
-            // Temporary diagnostic: prints exactly what the bridge reads back from EssentialsX,
-            // so a menu that renders no homes can be told apart from a bridge that reads none.
             if (!(sender instanceof Player self)) {
                 messages.send(sender, "general.players_only");
                 return;
             }
+            // Second diagnostic round: the first proved getHomes() returns empty while the limit
+            // and tiers read correctly, so this one reports which EssentialsX build is answering
+            // and what the concrete User type actually is.
             var bridge = plugin.essentials();
-            java.util.List<String> read = bridge.homes(self);
-            sender.sendMessage("[PolaroidHomes] essentials available: " + bridge.isAvailable());
-            sender.sendMessage("[PolaroidHomes] getHomes() -> size=" + read.size() + " " + read);
-            sender.sendMessage("[PolaroidHomes] homeLimit() -> " + bridge.homeLimit(self));
-            sender.sendMessage("[PolaroidHomes] tiers() -> " + bridge.tiers());
+            var ess = org.bukkit.Bukkit.getPluginManager().getPlugin("Essentials");
+            sender.sendMessage("[PH] Essentials version: "
+                    + (ess == null ? "null" : ess.getPluginMeta().getVersion()));
+            Object u = bridge.userObject(self);
+            sender.sendMessage("[PH] user class: " + (u == null ? "null" : u.getClass().getName()));
+            sender.sendMessage("[PH] getHomes(): " + bridge.homes(self));
+            sender.sendMessage("[PH] reflective getHomes(): " + bridge.homesReflective(self));
+            sender.sendMessage("[PH] userdata file homes: " + bridge.homesFromDisk(self));
             return;
         }
 

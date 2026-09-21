@@ -13,7 +13,7 @@ home teleport starts and when it arrives.
 
 ## What it does
 
-**A homes menu.** `/homes` opens a grid. Each home is drawn with the icon its owner picked; an
+**A homes menu.** `/homemenu` opens a grid. Each home is drawn with the icon its owner picked; an
 empty slot the player has already unlocked prompts them to set a home there; a slot above their
 rank shows a padlock and names the rank that unlocks it. The grid is sized at the server's highest
 configured tier, so a player can see what the ranks above them are worth.
@@ -55,7 +55,7 @@ Folia is supported.
 2. Drop `PolaroidHomes-<version>-b<build>.jar` into `plugins/`.
 3. Start the server once to generate `plugins/PolaroidHomes/config.yml` and
    `plugins/PolaroidHomes/lang/messages_en.yml`.
-4. Edit the configuration, then run `/homes reload`.
+4. Edit the configuration, then run `/homemenu reload`.
 
 ## Configuration
 
@@ -105,12 +105,12 @@ for the picker. Each element may declare `item` (any reference from the table be
 `custom-model-data` and `glow`; leaving `name` and `lore` out keeps the text from the language file,
 so translations keep working.
 
-The file is validated on startup and on `/homes reload`. A section it cannot use is reported in the
+The file is validated on startup and on `/homemenu reload`. A section it cannot use is reported in the
 console — naming the row or the key at fault — and that screen falls back to the built-in layout.
 The plugin is never disabled over a menu typo. An item reference that cannot be resolved falls back
 to a safe vanilla item and is reported once, so the window still opens.
 
-`/homes reload` closes every open menu, because a window is sized from its layout when it is built
+`/homemenu reload` closes every open menu, because a window is sized from its layout when it is built
 and cannot be resized in place. The new layout applies to the next window opened.
 
 #### Why `max-displayed-slots` exists
@@ -232,10 +232,10 @@ leaves it untouched rather than migrating it backwards and dropping settings it 
 
 | Command | Permission | What it does |
 |---|---|---|
-| `/homes` | `polaroidhomes.use` | Opens your homes menu. |
-| `/homes help` | — | Lists the commands you can use. |
-| `/homes <player>` | `polaroidhomes.admin` | Opens an online player's menu, read-only. |
-| `/homes reload` | `polaroidhomes.admin` | Re-reads the configuration and the language file. |
+| `/homemenu` | `polaroidhomes.use` | Opens your homes menu. |
+| `/homemenu help` | — | Lists the commands you can use. |
+| `/homemenu <player>` | `polaroidhomes.admin` | Opens an online player's menu, read-only. |
+| `/homemenu reload` | `polaroidhomes.admin` | Re-reads the configuration and the language file. |
 
 Aliases: `/phomes`, `/homemenu`.
 

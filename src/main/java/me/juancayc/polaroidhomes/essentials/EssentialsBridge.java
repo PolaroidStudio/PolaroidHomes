@@ -140,4 +140,42 @@ public final class EssentialsBridge {
         }
         return Bukkit.dispatchCommand(player, "essentials:home " + home);
     }
+
+    // ---------------------------------------------------------------- temporary diagnostics
+
+    /** The raw user object, so a diagnostic can report its concrete class. */
+    public @Nullable Object userObject(Player player) {
+        Essentials ess = essentials();
+        return ess == null ? null : ess.getUser(player);
+    }
+
+    /** getHomes() through reflection, to tell a linkage problem from an empty result. */
+    public String homesReflective(Player player) {
+        Object user = userObject(player);
+        if (user == null) {
+            return "<no user>";
+        }
+        try {
+            Object result = user.getClass().getMethod("getHomes").invoke(user);
+            return String.valueOf(result);
+        } catch (Throwable ex) {
+            return "<" + ex.getClass().getSimpleName() + ": " + ex.getMessage() + ">";
+        }
+    }
+
+    /** Reads the homes straight out of EssentialsX's own userdata file. */
+    public String homesFromDisk(Player player) {
+        Essentials ess = essentials();
+        if (ess == null) {
+            return "<no essentials>";
+        }
+        java.io.File file = new java.io.File(ess.getDataFolder(),
+                "userdata/" + player.getUniqueId() + ".yml");
+        if (!file.isFile()) {
+            return "<no file: " + file.getPath() + ">";
+        }
+        ConfigurationSection section = org.bukkit.configuration.file.YamlConfiguration
+                .loadConfiguration(file).getConfigurationSection("homes");
+        return section == null ? "<no homes section>" : String.valueOf(section.getKeys(false));
+    }
 }

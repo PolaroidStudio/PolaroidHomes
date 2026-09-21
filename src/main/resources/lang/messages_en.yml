@@ -44,17 +44,17 @@ icons:
 command:
   header: "<#315a7a>▬▬▬▬▬▬▬▬▬▬▬▬ <#289bd0>ʜᴏᴍᴇs <#315a7a>▬▬▬▬▬▬▬▬▬▬▬▬"
   help_open:
-    text: "<#f2c42f>▸ <#E9FDFB>/homes <#315a7a>— open your homes menu"
+    text: "<#f2c42f>▸ <#E9FDFB>/homemenu <#315a7a>— open your homes menu"
     hover: "<#315a7a>Permission: <#E9FDFB>polaroidhomes.use"
-    click: "[RUN_COMMAND] /homes"
+    click: "[RUN_COMMAND] /homemenu"
   help_reload:
-    text: "<#f2c42f>▸ <#E9FDFB>/homes reload <#315a7a>— reload the configuration"
+    text: "<#f2c42f>▸ <#E9FDFB>/homemenu reload <#315a7a>— reload the configuration"
     hover: "<#315a7a>Permission: <#E9FDFB>polaroidhomes.admin"
-    click: "[SUGGEST_COMMAND] /homes reload"
+    click: "[SUGGEST_COMMAND] /homemenu reload"
   help_open_other:
-    text: "<#f2c42f>▸ <#E9FDFB>/homes <player> <#315a7a>— open another player's menu"
+    text: "<#f2c42f>▸ <#E9FDFB>/homemenu <player> <#315a7a>— open another player's menu"
     hover: "<#315a7a>Permission: <#E9FDFB>polaroidhomes.admin"
-    click: "[SUGGEST_COMMAND] /homes "
+    click: "[SUGGEST_COMMAND] /homemenu "
 
 # --- Menu text -------------------------------------------------------------
 # Titles are dark grey and bold on purpose: a title is a label on the window,

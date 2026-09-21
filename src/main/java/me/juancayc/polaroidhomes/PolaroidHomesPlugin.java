@@ -203,14 +203,22 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
      * {@code UnsupportedOperationException} during startup rather than returning null. So the
      * label, description and aliases that would have lived in YAML are passed here instead, and
      * this is the single source of truth for them.
+     *
+     * <p>The label is deliberately NOT {@code homes}: EssentialsX registers {@code homes} as an
+     * alias of its own {@code /home}, and it loads first because this plugin declares it as a
+     * required BEFORE dependency. Registering {@code homes} here therefore lost the race silently
+     * — players ran {@code /homes}, EssentialsX answered, and this menu never opened. Every label
+     * used here was checked against EssentialsX's own command list; {@code home}, {@code homes},
+     * {@code ehome}, {@code ehomes}, {@code sethome}, {@code createhome}, {@code delhome},
+     * {@code remhome}, {@code rmhome} and {@code renamehome} are all taken.
      */
     private void registerCommand() {
         HomesCommand command = new HomesCommand(this);
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
                 event.registrar().register(
-                        "homes",
+                        "homemenu",
                         "Open the homes menu.",
-                        List.of("phomes", "homemenu"),
+                        List.of("phomes", "homesmenu", "hmenu"),
                         command));
     }
 

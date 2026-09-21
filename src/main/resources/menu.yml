@@ -74,10 +74,10 @@
 #
 # --- If you break it -------------------------------------------------------
 #
-# The plugin validates this file on startup and on /homes reload. A layout it
+# The plugin validates this file on startup and on /homemenu reload. A layout it
 # cannot use is reported in the console — naming the row or the key at fault —
 # and the built-in layout is used for that screen instead. The plugin keeps
-# running and homes keep working; fix the file and run /homes reload.
+# running and homes keep working; fix the file and run /homemenu reload.
 #
 # Rejected: more than 6 rows, a row that is not 9 characters, a character with
 # no matching element, no home-slot at all, and a layout that needs to page
@@ -87,7 +87,7 @@
 #
 # --- Reloading -------------------------------------------------------------
 #
-# /homes reload re-reads this file and closes every open menu. A window is
+# /homemenu reload re-reads this file and closes every open menu. A window is
 # sized from its layout when it is built, so an already-open window cannot be
 # resized in place — the new layout applies to the next one opened.
 # ---------------------------------------------------------------------------

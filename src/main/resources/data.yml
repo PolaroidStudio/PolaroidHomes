@@ -1,7 +1,7 @@
 # Storage backend for home icons.
 #
 # Changing type, the sqlite file, or the MySQL host/database needs a full restart.
-# /homes reload only re-reads YAML. It does not reopen the database.
+# /homemenu reload only re-reads YAML. It does not reopen the database.
 
 # sqlite — local file under the data/ folder. Default. One server.
 # mysql  — remote MySQL or MariaDB. Several servers sharing one icon store.
