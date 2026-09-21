@@ -100,4 +100,33 @@ public record ProviderSelection(@Nullable HomeProvider chosen, Outcome outcome, 
                     + "another plugin owns, so it cannot run without a home backend.";
         };
     }
+
+    /**
+     * A warning for an {@code auto} selection that had more than one backend to choose from.
+     *
+     * <p>{@code auto} picks by a fixed priority, not by which backend actually holds homes, so on a
+     * server running both it can pick the empty one. That reads exactly like a broken menu: the
+     * grid opens, the slots are right, and every home is missing. Saying which backend was chosen,
+     * and how to choose the other, is the difference between a one-line config fix and an
+     * afternoon of debugging.
+     *
+     * @return the warning, or null when there was nothing ambiguous to warn about
+     */
+    public @Nullable String ambiguityWarning(List<HomeProvider> candidates) {
+        if (outcome != Outcome.AUTO_SELECTED) {
+            return null;
+        }
+        List<String> installed = candidates.stream()
+                .filter(HomeProvider::isAvailable)
+                .map(HomeProvider::id)
+                .toList();
+        if (installed.size() < 2) {
+            return null;
+        }
+        return "More than one supported home plugin is installed (" + String.join(", ", installed)
+                + ") and hooks.home-provider is '" + AUTO + "', so " + chosen.pluginName()
+                + " was chosen by priority — not by which one actually holds your homes. If your "
+                + "homes live in another of them, set hooks.home-provider to that one in "
+                + "config.yml and run the reload command.";
+    }
 }

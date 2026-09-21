@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -195,5 +196,42 @@ class ProviderSelectionTest {
         assertTrue(auto.contains("huskhomes"), auto);
         assertTrue(auto.contains("automatically"), auto);
         assertTrue(explicit.contains("hooks.home-provider"), explicit);
+    }
+
+    // ------------------------------------------------------------------ auto ambiguity warning
+
+    @Test
+    void autoWarnsWhenMoreThanOneBackendIsInstalled() {
+        List<HomeProvider> candidates =
+                List.of(new FakeProvider("essentialsx", true), new FakeProvider("huskhomes", true));
+        ProviderSelection selection = ProviderSelection.resolve("auto", candidates);
+
+        String warning = selection.ambiguityWarning(candidates);
+        assertNotNull(warning, "two installed backends under auto is exactly the case that "
+                + "silently reads the wrong one; it has to be said out loud");
+        assertTrue(warning.contains("essentialsx"), "the warning must name what was chosen");
+        assertTrue(warning.contains("huskhomes"), "and what else was available");
+        assertTrue(warning.contains("hooks.home-provider"),
+                "a warning that does not name the key to change is just noise");
+    }
+
+    @Test
+    void autoDoesNotWarnWithOnlyOneBackendInstalled() {
+        List<HomeProvider> candidates =
+                List.of(new FakeProvider("essentialsx", false), new FakeProvider("huskhomes", true));
+        ProviderSelection selection = ProviderSelection.resolve("auto", candidates);
+
+        assertNull(selection.ambiguityWarning(candidates),
+                "there is nothing ambiguous about the only installed backend");
+    }
+
+    @Test
+    void anExplicitChoiceNeverWarnsAboutAmbiguity() {
+        List<HomeProvider> candidates =
+                List.of(new FakeProvider("essentialsx", true), new FakeProvider("huskhomes", true));
+        ProviderSelection selection = ProviderSelection.resolve("huskhomes", candidates);
+
+        assertNull(selection.ambiguityWarning(candidates),
+                "the operator already chose; repeating the choice back is noise");
     }
 }

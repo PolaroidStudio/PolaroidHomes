@@ -53,6 +53,8 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
     private MenuConfig menus;
     private MessageService messages;
     private HomeProvider provider;
+    /** The provider-specific icon-lifecycle listener, kept only so a reload can unregister it. */
+    private Listener iconLifecycle;
     private String selectedProviderRequest;
     private DatabaseManager database;
     private SqlIconStorage icons;
@@ -165,6 +167,10 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
         }
         this.provider = selection.chosen();
         getLogger().info(line);
+        String ambiguity = selection.ambiguityWarning(candidates);
+        if (ambiguity != null) {
+            getLogger().warning(ambiguity);
+        }
         if (!provider.supportsTiers()) {
             // Said once, at enable, rather than left for an operator to discover from a menu that
             // looks like it lost a feature.
@@ -222,7 +228,8 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
         // Only the selected provider's listeners are registered. Registering both would need the
         // other provider's event classes to resolve, which fails with a NoClassDefFoundError on a
         // server that does not have that plugin installed.
-        getServer().getPluginManager().registerEvents(iconLifecycleListener(), this);
+        this.iconLifecycle = iconLifecycleListener();
+        getServer().getPluginManager().registerEvents(iconLifecycle, this);
 
         this.iconCache = new IconCacheListener(this, icons);
         getServer().getPluginManager().registerEvents(iconCache, this);
@@ -330,7 +337,7 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
         menus.reload();
         messages.reload();
         warnIfBackendChanged();
-        warnIfProviderChanged();
+        boolean providerChanged = reselectProvider();
 
         // The old effect is shut down before the new one exists, so its markers are removed while
         // the object that knows about them is still the live one.
@@ -342,10 +349,20 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
             clearTeleportListener();
         }
         this.effect = TeleportEffectFactory.create(this, config);
-        // Rebuilt for the SAME provider deliberately: the provider is fixed for the session, so a
-        // reload only ever swaps which effect the listener plays, never which events it listens to.
         this.teleportListener = teleportListener();
         getServer().getPluginManager().registerEvents(teleportListener, this);
+
+        // The icon-lifecycle listener is per provider too, so a provider swap has to re-hook it or
+        // renames and deletes would keep being read from the backend that is no longer in use.
+        // Only rebuilt when the provider actually changed: its listener is otherwise stateless and
+        // re-registering it every reload would be churn for nothing.
+        if (providerChanged) {
+            if (iconLifecycle != null) {
+                HandlerList.unregisterAll(iconLifecycle);
+            }
+            this.iconLifecycle = iconLifecycleListener();
+            getServer().getPluginManager().registerEvents(iconLifecycle, this);
+        }
 
         rebuildContext();
 
@@ -383,13 +400,55 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
      * reading another, and icons attributed to whichever was in use when they were picked. A restart
      * is the honest answer, exactly as it is for a changed database.
      */
-    private void warnIfProviderChanged() {
-        if (!config.homeProvider().equalsIgnoreCase(selectedProviderRequest)) {
-            getLogger().warning("hooks.home-provider now reads '" + config.homeProvider()
-                    + "', but " + provider.pluginName() + " is still in use. Restart the server to "
-                    + "apply the change; stored icons are keyed to the home names of the backend "
-                    + "they were chosen under.");
+    /**
+     * Applies a changed {@code hooks.home-provider} without a restart.
+     *
+     * <p>Switching backend only needs the provider object swapped and its two provider-specific
+     * listeners re-hooked, both of which this class already does for the teleport listener on every
+     * reload. Making an operator restart the server to correct one config line — most often because
+     * {@code auto} picked the backend that happens to be empty — was a limitation of this code, not
+     * of the backends.
+     *
+     * <p>What genuinely does not survive the swap is the icon store: rows are keyed to a backend's
+     * home names, so after a switch an icon only reappears on a home whose name matches. Nothing is
+     * deleted, so switching back restores them. That is said out loud rather than prevented.
+     *
+     * @return true when the live provider was replaced
+     */
+    private boolean reselectProvider() {
+        String requested = config.homeProvider();
+        if (requested.equalsIgnoreCase(selectedProviderRequest)) {
+            return false;
         }
+
+        List<HomeProvider> candidates = HomeProviders.candidates(this);
+        ProviderSelection selection = ProviderSelection.resolve(requested, candidates);
+        if (!selection.isResolved()) {
+            // Refused rather than applied: the running provider is working, and dropping it for one
+            // that cannot be resolved would turn a typo into an unusable menu.
+            getLogger().severe(selection.describe(candidates)
+                    + " Keeping " + provider.pluginName() + " until this is corrected.");
+            return false;
+        }
+        if (selection.chosen().id().equals(provider.id())) {
+            // The request changed but resolves to the same backend, e.g. auto -> essentialsx.
+            this.selectedProviderRequest = requested;
+            return false;
+        }
+
+        String previous = provider.pluginName();
+        this.provider = selection.chosen();
+        this.selectedProviderRequest = requested;
+        getLogger().info(selection.describe(candidates)
+                + " Switched from " + previous + " without a restart.");
+        getLogger().warning("Stored icons are keyed to the home names of the backend they were "
+                + "chosen under, so an icon set under " + previous + " only shows again on a home "
+                + "of the same name. Nothing was deleted.");
+        if (!provider.supportsTiers()) {
+            getLogger().info(provider.pluginName() + " does not expose the ranks behind its home "
+                    + "limits, so locked slots name no rank.");
+        }
+        return true;
     }
 
     /**
