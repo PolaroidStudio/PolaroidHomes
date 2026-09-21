@@ -2,6 +2,7 @@ package me.juancayc.polaroidhomes.config;
 
 import org.bukkit.Particle;
 import org.bukkit.configuration.ConfigurationSection;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Locale;
 
@@ -34,6 +35,41 @@ public record EffectSettings(String model,
                 parseParticle(section.getString("particle"), defaultParticle),
                 Math.max(0, section.getInt("particle-count", 60)),
                 Math.max(0.0D, section.getDouble("particle-radius", 1.0D)));
+    }
+
+    /**
+     * Reads a section, taking every field the section does not set from {@code inherited}.
+     *
+     * <p>The difference from {@link #from} is which values fill the gaps: there it is the shipped
+     * defaults, here it is another block the operator already configured. That is what lets the
+     * {@code tpa} block be written as only the one or two fields that differ from the home effect,
+     * or left out entirely to mean "the same".
+     *
+     * <p>{@code isSet} rather than a sentinel default: a section that explicitly writes
+     * {@code particle-count: 0} means zero, and a getter's default argument cannot tell that apart
+     * from the key being absent.
+     */
+    public static EffectSettings inheriting(@Nullable ConfigurationSection section,
+                                            EffectSettings inherited) {
+        if (section == null) {
+            return inherited;
+        }
+        return new EffectSettings(
+                section.isSet("model") ? section.getString("model", inherited.model())
+                        : inherited.model(),
+                section.isSet("animation") ? section.getString("animation", inherited.animation())
+                        : inherited.animation(),
+                section.isSet("duration")
+                        ? Math.max(0.0D, section.getDouble("duration", inherited.durationSeconds()))
+                        : inherited.durationSeconds(),
+                parseParticle(section.getString("particle"), inherited.particle()),
+                section.isSet("particle-count")
+                        ? Math.max(0, section.getInt("particle-count", inherited.particleCount()))
+                        : inherited.particleCount(),
+                section.isSet("particle-radius")
+                        ? Math.max(0.0D, section.getDouble("particle-radius",
+                                inherited.particleRadius()))
+                        : inherited.particleRadius());
     }
 
     /** Ticks this effect occupies, rounded up so a fractional second is never cut short. */

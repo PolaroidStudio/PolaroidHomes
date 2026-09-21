@@ -2,7 +2,6 @@ package me.juancayc.polaroidhomes.config;
 
 import me.juancayc.polaroidhomes.intercept.CommandInterceptor;
 import me.juancayc.polaroidhomes.world.WorldBlacklist;
-import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -31,8 +30,9 @@ public final class PluginConfig {
 
     private EffectMode mode;
     private EffectMode fallbackMode;
-    private EffectSettings entry;
-    private EffectSettings arrival;
+    private TeleportEffects homeEffects;
+    private TeleportEffects tpaEffects;
+    private boolean tpaEffectsEnabled;
     private double maxEffectSeconds;
 
     private long saveIntervalTicks;
@@ -76,8 +76,15 @@ public final class PluginConfig {
                 : configuredFallback;
 
         ConfigurationSection effects = config.getConfigurationSection("teleport-effects");
-        this.entry = EffectSettings.from(section(effects, "entry"), Particle.PORTAL, 2.0D);
-        this.arrival = EffectSettings.from(section(effects, "arrival"), Particle.END_ROD, 1.5D);
+        this.homeEffects = TeleportEffects.from(effects);
+        // The tpa block inherits from the home block rather than from the shipped defaults, so an
+        // operator who tuned the home effect and wants the same look for /tpa writes nothing at all.
+        this.tpaEffects = TeleportEffects.from(section(effects, "tpa"), homeEffects);
+        // On for a fresh install, which chose this plugin for its teleport effects. An existing
+        // server gets false written into its file by the v4 -> v5 migration instead, so upgrading
+        // never changes what players already see. Read here rather than checked in the listener so
+        // a reload can turn it on and off without re-registering anything.
+        this.tpaEffectsEnabled = config.getBoolean("teleport-effects.tpa.enabled", true);
         this.maxEffectSeconds = Math.max(1.0D,
                 config.getDouble("teleport-effects.max-effect-seconds", 10.0D));
 
@@ -166,11 +173,27 @@ public final class PluginConfig {
     }
 
     public EffectSettings entry() {
-        return entry;
+        return homeEffects.entry();
     }
 
     public EffectSettings arrival() {
-        return arrival;
+        return homeEffects.arrival();
+    }
+
+    /** Entry and arrival for an accepted {@code /tpa}, resolved against the home settings. */
+    public TeleportEffects tpaEffects() {
+        return tpaEffects;
+    }
+
+    /**
+     * Whether an accepted {@code /tpa} is decorated at all.
+     *
+     * <p>Never applies to {@code /tpahere}: that direction moves the recipient, and the effect
+     * follows whoever travels, so a tpahere has nothing this plugin decorates regardless of this
+     * switch.
+     */
+    public boolean tpaEffectsEnabled() {
+        return tpaEffectsEnabled;
     }
 
     public double maxEffectSeconds() {

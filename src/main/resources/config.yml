@@ -14,7 +14,7 @@
 # preserving every value you edited, and backs the original up first. Do not edit
 # this by hand: lowering it re-runs migrations, raising it makes the plugin refuse
 # to touch the file.
-config-version: 4
+config-version: 5
 
 # Language file loaded from lang/messages_<language>.yml. Any key missing from
 # that file falls back to the English one shipped inside the jar, so a partial
@@ -221,6 +221,44 @@ teleport-effects:
     particle: END_ROD
     particle-count: 80
     particle-radius: 1.0
+
+  # --- Teleport requests -----------------------------------------------------
+  #
+  # /tpa only. A /tpa moves the player who asked, so that player gets the
+  # effect. A /tpahere moves the player who was asked, and is deliberately
+  # never decorated: the effect follows whoever travels, and that direction was
+  # not what this was asked for.
+  #
+  # Only the travelling player is decorated. The one standing still sees
+  # nothing, because nothing is happening to them.
+  #
+  # Neither backend announces "this teleport came from a tpa" at the moment it
+  # happens, so the plugin remembers the request and matches it to the teleport
+  # that follows. A /warp, a /spawn and a /back are therefore never decorated,
+  # and neither is a /tp an admin ran on somebody.
+  #
+  # Warmup: with EssentialsX the teleport warmup is stretched to fit the entry
+  # duration below, exactly as it is for a home. HuskHomes does not allow its
+  # warmup to be changed for any teleport, so there the entry plays alongside
+  # whatever warmup HuskHomes already has.
+  tpa:
+    # Turn the whole thing off here. On by default for a new install; an
+    # existing server upgrading into this release gets false written into its
+    # own config.yml instead, so nothing players already see changes under them.
+    enabled: true
+
+    # --- Inheritance ---------------------------------------------------------
+    # Anything not set below is taken from the home effect above, field by
+    # field. Delete this whole tpa block except for `enabled` and a /tpa looks
+    # exactly like a home teleport. Set only `particle` and only the particle
+    # changes, keeping the home duration, model, animation, count and radius.
+    #
+    # The shipped values below are a deliberate variation, not a copy: a
+    # different particle makes a tpa readable as a tpa from across the room.
+    entry:
+      particle: DRAGON_BREATH
+    arrival:
+      particle: TOTEM_OF_UNDYING
 
   # Safety ceiling, in seconds, for how long a Model Engine marker entity may
   # live before it is removed regardless of the animation state. A marker that

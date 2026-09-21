@@ -1,13 +1,19 @@
 package me.juancayc.polaroidhomes.listener;
 
+import me.juancayc.polaroidhomes.config.EffectSettings;
 import me.juancayc.polaroidhomes.config.PluginConfig;
+import me.juancayc.polaroidhomes.config.TeleportEffects;
 import me.juancayc.polaroidhomes.effect.ArrivalWatcher;
 import me.juancayc.polaroidhomes.effect.TeleportEffect;
+import me.juancayc.polaroidhomes.teleport.PendingTpaRequests;
+import net.william278.huskhomes.event.ReplyTeleportRequestEvent;
 import net.william278.huskhomes.event.TeleportEvent;
 import net.william278.huskhomes.event.TeleportWarmupEvent;
 import net.william278.huskhomes.position.Home;
 import net.william278.huskhomes.teleport.Teleport;
+import net.william278.huskhomes.teleport.TeleportRequest;
 import net.william278.huskhomes.teleport.Teleportable;
+import net.william278.huskhomes.teleport.Username;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -16,7 +22,9 @@ import org.bukkit.event.Listener;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -37,7 +45,22 @@ import java.util.UUID;
  * HuskHomes configured; if that warmup is shorter, the player is moved while the animation is still
  * running. That is a real difference between the two backends, not something worked around here — an
  * operator who wants the full animation sets HuskHomes' own warmup to at least
- * {@code teleport-effects.entry.duration}.
+ * {@code teleport-effects.entry.duration}. The same applies to the tpa effect, which has no warmup
+ * lever of its own either.
+ *
+ * <h2>How an accepted tpa is recognised</h2>
+ *
+ * <p>HuskHomes states the direction plainly, but only on the request. {@code TeleportRequest.Type}
+ * has explicit {@code TPA} and {@code TPA_HERE} values, and {@code ReplyTeleportRequestEvent}
+ * carries the request together with {@code isAccepted()}, so the acceptance is a single event
+ * naming both the direction and the traveller. What it does not do is reach the teleport: the move
+ * that follows is a {@code Teleport} of type {@code TELEPORT} whose target is a
+ * {@code Username}, which is also what {@code /tpaccept} on a tpahere, and other username-targeted
+ * teleports, produce.
+ *
+ * <p>So the acceptance is recorded in {@link PendingTpaRequests} against the player it moves, and
+ * the teleport side claims that mark. A {@code /tpahere} is never recorded, and a {@code /warp} or
+ * {@code /back} has a target that is not a {@code Username} at all, so neither is ever decorated.
  */
 public final class HuskHomesTeleportListener implements Listener {
 
@@ -53,10 +76,49 @@ public final class HuskHomesTeleportListener implements Listener {
      */
     private final Set<UUID> decorating = new HashSet<>();
 
+    /** Accepted {@code /tpa} requests whose teleport has not been claimed yet. */
+    private final PendingTpaRequests tpaRequests = new PendingTpaRequests();
+
+    /**
+     * Teleports in flight being decorated with the tpa settings rather than the home ones.
+     *
+     * <p>Held for the same reason {@link #decorating} is: the warmup event and the teleport event
+     * both fire for one teleport, and the second must reuse what the first resolved rather than
+     * try to claim an already-consumed mark.
+     */
+    private final Map<UUID, TeleportEffects> decoratingTpa = new HashMap<>();
+
     public HuskHomesTeleportListener(Plugin plugin, PluginConfig config, TeleportEffect effect) {
         this.plugin = plugin;
         this.config = config;
         this.effect = effect;
+    }
+
+    /**
+     * Records an accepted {@code /tpa} against the player it is about to move.
+     *
+     * <p>This event also fires for a decline, and for a tpahere in both directions, which is why
+     * both {@code isAccepted()} and the request type are checked. The requester is the traveller
+     * for a {@code TPA}; for a {@code TPA_HERE} it would be the recipient, and that case is
+     * deliberately dropped rather than recorded under the other name.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onReply(ReplyTeleportRequestEvent event) {
+        if (!config.tpaEffectsEnabled() || !event.isAccepted()) {
+            return;
+        }
+        TeleportRequest request = event.getRequest();
+        if (request == null || request.getRequesterName() == null) {
+            return;
+        }
+        Player traveller = Bukkit.getPlayerExact(request.getRequesterName());
+        if (traveller == null) {
+            // Cross-server request: the requester is on another backend and there is no Bukkit
+            // player here to draw anything around. Nothing to record.
+            return;
+        }
+        tpaRequests.remember(traveller.getUniqueId(),
+                request.getType() == TeleportRequest.Type.TPA_HERE, System.currentTimeMillis());
     }
 
     /**
@@ -65,9 +127,25 @@ public final class HuskHomesTeleportListener implements Listener {
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onWarmup(TeleportWarmupEvent event) {
-        Player player = homeTeleportPlayer(event.getTimedTeleport());
-        if (player != null && decorating.add(player.getUniqueId())) {
-            effect.playEntry(player, config.entry());
+        Teleport teleport = event.getTimedTeleport();
+        Player player = homeTeleportPlayer(teleport);
+        if (player != null) {
+            if (decorating.add(player.getUniqueId())) {
+                effect.playEntry(player, config.entry());
+            }
+            return;
+        }
+        player = tpaTeleportPlayer(teleport);
+        if (player == null) {
+            return;
+        }
+        // Resolved settings are stored before the play guard, not inside it: the mark has already
+        // been consumed by tpaTeleportPlayer, so dropping them here would leave the teleport event
+        // unable to tell this tpa from an undecorated teleport.
+        TeleportEffects tpa = config.tpaEffects();
+        decoratingTpa.put(player.getUniqueId(), tpa);
+        if (decorating.add(player.getUniqueId())) {
+            effect.playEntry(player, tpa.entry());
         }
     }
 
@@ -80,16 +158,33 @@ public final class HuskHomesTeleportListener implements Listener {
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onTeleport(TeleportEvent event) {
-        Player player = homeTeleportPlayer(event.getTeleport());
-        if (player == null) {
-            return;
+        Teleport teleport = event.getTeleport();
+        Player player = homeTeleportPlayer(teleport);
+        EffectSettings entry;
+        EffectSettings arrival;
+        if (player != null) {
+            entry = config.entry();
+            arrival = config.arrival();
+        } else {
+            player = tpaTeleportPlayer(teleport);
+            if (player == null) {
+                return;
+            }
+            // The warmup may already have resolved these; if it did, reuse them, because the mark
+            // it claimed is gone and claiming again would find nothing.
+            TeleportEffects tpa = decoratingTpa.remove(player.getUniqueId());
+            if (tpa == null) {
+                tpa = config.tpaEffects();
+            }
+            entry = tpa.entry();
+            arrival = tpa.arrival();
         }
         UUID id = player.getUniqueId();
         if (decorating.add(id)) {
             // No warmup event fired for this one, so the entry effect has not played yet. It gets the
             // one tick before the move rather than a full animation, which is all an instant teleport
             // can honestly give it.
-            effect.playEntry(player, config.entry());
+            effect.playEntry(player, entry);
         }
         decorating.remove(id);
 
@@ -97,8 +192,9 @@ public final class HuskHomesTeleportListener implements Listener {
         // asynchronously and a cross-world teleport routinely has not landed a tick later, which
         // drew the arrival around a player still standing at the origin — invisibly, on top of the
         // departure effect just drawn there.
-        ArrivalWatcher.await(plugin, player, player.getLocation(),
-                (arrived, destination) -> effect.playArrival(arrived, destination, config.arrival()));
+        Player travelling = player;
+        ArrivalWatcher.await(plugin, travelling, travelling.getLocation(),
+                (arrived, destination) -> effect.playArrival(arrived, destination, arrival));
     }
 
     /**
@@ -122,12 +218,48 @@ public final class HuskHomesTeleportListener implements Listener {
         return Bukkit.getPlayerExact(teleporter.getName());
     }
 
+    /**
+     * The Bukkit player being moved, but only for a teleport that an accepted {@code /tpa} caused.
+     *
+     * <p>Two things must both hold. The target must be a {@code Username}, which rules out a
+     * {@code /warp}, a {@code /back} and a {@code /home} outright, since none of those targets a
+     * player. And the traveller must be holding a mark recorded by {@link #onReply}, which is what
+     * rules out the remaining username-targeted teleports: a {@code /tpahere}, and a
+     * {@code /tp other} an admin ran. The mark is consumed here, so one accepted request decorates
+     * exactly one teleport.
+     */
+    private @Nullable Player tpaTeleportPlayer(@Nullable Teleport teleport) {
+        if (!config.tpaEffectsEnabled() || teleport == null
+                || !(teleport.getTarget() instanceof Username)) {
+            return null;
+        }
+        Teleportable teleporter = teleport.getTeleporter();
+        if (teleporter == null || teleporter.getName() == null) {
+            return null;
+        }
+        Player player = Bukkit.getPlayerExact(teleporter.getName());
+        if (player == null) {
+            return null;
+        }
+        UUID id = player.getUniqueId();
+        // Already resolved by the warmup event for this same teleport: the mark is spent, and the
+        // settings it produced are waiting in decoratingTpa.
+        if (decoratingTpa.containsKey(id)) {
+            return player;
+        }
+        return tpaRequests.claim(id, System.currentTimeMillis()) ? player : null;
+    }
+
     /** Drops a pending mark so a disconnect mid-warmup does not leak one forever. */
     public void forget(UUID playerId) {
         decorating.remove(playerId);
+        decoratingTpa.remove(playerId);
+        tpaRequests.forget(playerId);
     }
 
     public void clear() {
         decorating.clear();
+        decoratingTpa.clear();
+        tpaRequests.clear();
     }
 }

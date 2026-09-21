@@ -205,12 +205,13 @@ class ConfigMigratorTest {
 
     @Test
     void theShippedRegistryTargetsTheVersionThisJarShips() {
-        // config.yml is at 4: v2 moved max-displayed-slots into menu.yml and turned gui.rows into the
+        // config.yml is at 5: v2 moved max-displayed-slots into menu.yml and turned gui.rows into the
         // row strings there, v3 added the hooks section that names the home provider, v4 added
-        // commands.intercept and worlds.blacklist. messages_en.yml is at 2, for the rename, delete
-        // and blocked-world keys plus the two new home-button shapes. menu.yml and data.yml never
-        // needed restructuring, so they stay at the baseline.
-        assertEquals(4, ConfigMigrations.config().targetVersion());
+        // commands.intercept and worlds.blacklist, v5 added the teleport-effects.tpa block.
+        // messages_en.yml is at 2, for the rename, delete and blocked-world keys plus the two new
+        // home-button shapes. menu.yml and data.yml never needed restructuring, so they stay at the
+        // baseline.
+        assertEquals(5, ConfigMigrations.config().targetVersion());
         assertEquals(1, ConfigMigrations.menu().targetVersion());
         assertEquals(1, ConfigMigrations.data().targetVersion());
         assertEquals(2, ConfigMigrations.messages().targetVersion());
@@ -243,6 +244,69 @@ class ConfigMigratorTest {
         ConfigMigrations.disableInterceptionOnUpgrade().apply(config);
 
         assertEquals(true, config.getBoolean("commands.intercept.homes"));
+    }
+
+    /**
+     * The v4 -> v5 step turns the tpa effect OFF for a file that predates it, although the shipped
+     * file has it on.
+     *
+     * <p>Same asymmetry as the interception step above, and for the same reason: an upgrade that
+     * silently starts drawing an animation around every accepted {@code /tpa} changes what every
+     * player on the server sees, and nobody asked for that by installing a newer jar.
+     */
+    @Test
+    void theTpaStepTurnsTheTpaEffectOffForAnUpgradingFile() {
+        YamlConfiguration config = defaults("config-version: 4\n");
+
+        ConfigMigrations.disableTpaEffectsOnUpgrade().apply(config);
+
+        assertFalse(config.getBoolean("teleport-effects.tpa.enabled"));
+    }
+
+    @Test
+    void theTpaStepLeavesAnOperatorsOwnChoiceAlone() {
+        YamlConfiguration config = defaults("""
+                config-version: 4
+                teleport-effects:
+                  tpa:
+                    enabled: true
+                """);
+
+        ConfigMigrations.disableTpaEffectsOnUpgrade().apply(config);
+
+        assertTrue(config.getBoolean("teleport-effects.tpa.enabled"));
+    }
+
+    /**
+     * Only {@code enabled} is written. Every other key in the tpa block is optional by design, so
+     * writing one here would pin a value the operator never chose and break the inheritance the
+     * config comments promise.
+     */
+    @Test
+    void theTpaStepWritesNothingButTheSwitch() {
+        YamlConfiguration config = defaults("config-version: 4\n");
+
+        ConfigMigrations.disableTpaEffectsOnUpgrade().apply(config);
+
+        assertFalse(config.contains("teleport-effects.tpa.entry"));
+        assertFalse(config.contains("teleport-effects.tpa.arrival"));
+    }
+
+    /** The home effect an operator already tuned must survive the step untouched. */
+    @Test
+    void theTpaStepLeavesTheHomeEffectAlone() {
+        YamlConfiguration config = defaults("""
+                config-version: 4
+                teleport-effects:
+                  entry:
+                    duration: 7.5
+                    particle: FLAME
+                """);
+
+        ConfigMigrations.disableTpaEffectsOnUpgrade().apply(config);
+
+        assertEquals(7.5D, config.getDouble("teleport-effects.entry.duration"));
+        assertEquals("FLAME", config.getString("teleport-effects.entry.particle"));
     }
 
     @Test

@@ -24,15 +24,16 @@ import java.util.logging.Level;
  *       version it moved away from. See {@link #exampleRenameStep()} for a worked one.</li>
  * </ol>
  *
- * <p>config.yml is at version 3. Version 2 moved {@code gui.max-displayed-slots} into menu.yml,
+ * <p>config.yml is at version 5. Version 2 moved {@code gui.max-displayed-slots} into menu.yml,
  * where the layout that gives the cap its meaning now lives; version 3 added the {@code hooks}
- * section, which names the home provider. The other files sit at version 1, the baseline this system
- * was introduced at.
+ * section, which names the home provider; version 4 added command interception and the world
+ * blacklist; version 5 added teleport-request effects. The other files sit at version 1, the
+ * baseline this system was introduced at.
  */
 public final class ConfigMigrations {
 
     /** Baseline. Bump alongside {@code config-version} in the matching resource file. */
-    public static final int CONFIG_VERSION = 4;
+    public static final int CONFIG_VERSION = 5;
     public static final int DATA_VERSION = 1;
     public static final int MESSAGES_VERSION = 2;
 
@@ -72,7 +73,15 @@ public final class ConfigMigrations {
                 // changing what that command does during an upgrade they did not read about is not
                 // a migration, it is a surprise. So an upgrading file gets interception off, and a
                 // fresh install gets the shipped 'homes: true' from the file itself.
-                .step(3, disableInterceptionOnUpgrade());
+                .step(3, disableInterceptionOnUpgrade())
+                // v4 -> v5: teleport effects extended to accepted /tpa requests. Same judgement as
+                // v3's step, and for the same reason: the shipped default is on, and letting the
+                // add-absent-keys pass hand that default to an existing install would make a
+                // cosmetic upgrade change what every player on the server sees the next time
+                // somebody accepts a tpa. Nobody asked for that during an upgrade, so it arrives
+                // off and the operator turns it on when they have read what it does. A fresh
+                // install gets 'enabled: true' from the shipped file.
+                .step(4, disableTpaEffectsOnUpgrade());
     }
 
     public static FileMigration menu() {
@@ -121,6 +130,24 @@ public final class ConfigMigrations {
             }
             if (!config.contains("commands.intercept.home")) {
                 config.set("commands.intercept.home", false);
+            }
+        };
+    }
+
+    /**
+     * Writes {@code teleport-effects.tpa.enabled: false} into a config.yml that predates the key.
+     *
+     * <p>The rest of the {@code tpa} block is deliberately NOT written here. Every other key in it
+     * is optional by design — an unset field inherits from the home effect — so the engine's
+     * add-absent-keys pass giving this install the shipped {@code particle} lines is exactly right:
+     * those are what a fresh install would get too, and the feature they configure is switched off
+     * until the operator says otherwise. Only {@code enabled} has a shipped default that would
+     * change behaviour, which is the whole reason this step exists.
+     */
+    public static MigrationStep disableTpaEffectsOnUpgrade() {
+        return config -> {
+            if (!config.contains("teleport-effects.tpa.enabled")) {
+                config.set("teleport-effects.tpa.enabled", false);
             }
         };
     }
