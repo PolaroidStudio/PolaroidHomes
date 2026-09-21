@@ -236,7 +236,7 @@ class MenuTemplateTest {
     @Test
     @DisplayName("paging buttons on a layout that never pages are accepted silently")
     void paginationOnASinglePageLayoutIsFine() {
-        // How many slots a player sees comes from their EssentialsX tier; the cap is only a
+        // How many slots a player sees comes from their rank or their own limit; the cap is only a
         // ceiling. Warning here would fire on the shipped default.
         Elements placed = new Elements()
                 .with('H', MenuElement.HOME_SLOT)

@@ -18,7 +18,9 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Plays the departure and arrival effects around an EssentialsX home teleport.
+ * Plays the departure and arrival effects around an EssentialsX home teleport. The EssentialsX half
+ * of {@link HuskHomesTeleportListener}; only the listener matching the selected provider is
+ * registered.
  *
  * <p>The event chain EssentialsX gives us is: {@code UserTeleportHomeEvent} (before the warmup),
  * then {@code TeleportWarmupEvent} (where the delay can still be changed), then

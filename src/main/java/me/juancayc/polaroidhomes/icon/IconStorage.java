@@ -7,8 +7,9 @@ import java.util.UUID;
 /**
  * Stores the icon chosen for one player's home.
  *
- * <p>Icons are this plugin's only owned state. EssentialsX has no API for home metadata, so the
- * mapping {@code player uuid + home name -> item reference} lives here and nowhere else.
+ * <p>Icons are this plugin's only owned state. No supported home provider offers an API for home
+ * metadata, so the mapping {@code player uuid + home name -> item reference} lives here and nowhere
+ * else. The key is the home's NAME, which is why a rename has to be followed rather than ignored.
  *
  * <p>The interface exists so a SQL backend can replace the YAML one without the menu knowing. Every
  * method is expected to be cheap and callable from the main thread; an implementation that does
@@ -23,7 +24,7 @@ public interface IconStorage {
     void setIcon(UUID player, String home, @Nullable String reference);
 
     /**
-     * Moves an icon when EssentialsX renames a home.
+     * Moves an icon when the home provider renames a home.
      *
      * <p>Without this the icon orphans: it stays keyed to a name no home has any more, and the
      * renamed home silently loses its picture.

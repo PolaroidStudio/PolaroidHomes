@@ -98,11 +98,11 @@
 config-version: 1
 
 # Hard ceiling on how many home slots are drawn across all pages, and the
-# reason a misconfigured EssentialsX tier cannot break the menu. A server that
+# reason a misconfigured home limit cannot break the menu. A server that
 # defines `sethome-multiple.vip: 9999` would otherwise ask this plugin to
 # render 9999 slots. The grid is sized as:
 #
-#     visibleSlots = min(highest configured EssentialsX tier, max-displayed-slots)
+#     visibleSlots = min(highest configured rank limit, max-displayed-slots)
 #
 # It lives here rather than in config.yml because it only means anything next
 # to the layout below: if you set it higher than one page of home slots, the
@@ -146,7 +146,7 @@ homes:
       lore:
         - "<#E9FDFB>Page <#b6c1ec>%page%<#E9FDFB> of <#b6c1ec>%pages%"
         - ""
-        - "<#315a7a>Your limit comes from EssentialsX."
+        - "<#315a7a>Your limit comes from your home plugin."
     # A close button is not on the default grid, so that this release draws the
     # same window earlier ones did. To add one, put a character in a row and
     # declare it here, for example:

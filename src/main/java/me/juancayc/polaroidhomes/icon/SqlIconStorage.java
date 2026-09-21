@@ -301,8 +301,10 @@ public final class SqlIconStorage implements IconStorage {
     }
 
     /**
-     * EssentialsX lowercases home names internally, so the key must be lowercased too or
-     * {@code /sethome Base} and {@code /home base} end up with two different icons.
+     * Home names are keyed lowercase, because every supported provider treats them
+     * case-insensitively: without this {@code /sethome Base} and {@code /home base} would end up with
+     * two different icons. Folding case can only ever merge two spellings of one home, never split
+     * one, so it stays correct for a provider that preserves the case the player typed.
      */
     private static String normalize(String home) {
         return Objects.requireNonNull(home, "home").toLowerCase(Locale.ROOT);

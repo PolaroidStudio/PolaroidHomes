@@ -24,14 +24,15 @@ import java.util.logging.Level;
  *       version it moved away from. See {@link #exampleRenameStep()} for a worked one.</li>
  * </ol>
  *
- * <p>config.yml is at version 2: {@code gui.max-displayed-slots} moved into menu.yml, which is
- * where the layout that gives the cap its meaning now lives. The other files sit at version 1, the
- * baseline this system was introduced at.
+ * <p>config.yml is at version 3. Version 2 moved {@code gui.max-displayed-slots} into menu.yml,
+ * where the layout that gives the cap its meaning now lives; version 3 added the {@code hooks}
+ * section, which names the home provider. The other files sit at version 1, the baseline this system
+ * was introduced at.
  */
 public final class ConfigMigrations {
 
     /** Baseline. Bump alongside {@code config-version} in the matching resource file. */
-    public static final int CONFIG_VERSION = 2;
+    public static final int CONFIG_VERSION = 3;
     public static final int DATA_VERSION = 1;
     public static final int MESSAGES_VERSION = 1;
 
@@ -55,7 +56,14 @@ public final class ConfigMigrations {
                 // maxDisplayedSlotsToMenu before this step drops the dead key, so an operator who
                 // raised or lowered it keeps their number. gui.rows is dropped outright: the row
                 // strings in menu.yml are the row count now.
-                .step(1, dropMovedMaxDisplayedSlots());
+                .step(1, dropMovedMaxDisplayedSlots())
+                // v2 -> v3: the hooks section arrived. Written explicitly rather than left to the
+                // engine's add-absent-keys pass because the default this existing install needs is
+                // NOT the shipped one: it has been running on EssentialsX, and 'auto' would keep
+                // choosing EssentialsX today but would silently change backend the day the operator
+                // installs HuskHomes. Pinning the backend the icons were recorded against is the
+                // only answer that cannot move under them.
+                .step(2, pinExistingInstallToEssentials());
     }
 
     public static FileMigration menu() {
@@ -71,6 +79,21 @@ public final class ConfigMigrations {
             // recognise as theirs. Left in place it would read as a setting that quietly stopped
             // working.
             MigrationStep.remove(config, "gui.rows");
+        };
+    }
+
+    /**
+     * Writes {@code hooks.home-provider: essentialsx} into a config.yml that predates the key.
+     *
+     * <p>A file being migrated from version 2 came from a build where EssentialsX was a hard
+     * dependency, so EssentialsX is provably the backend its stored icons are keyed against. A fresh
+     * install gets {@code auto} from the shipped file instead, because it has no history to preserve.
+     */
+    public static MigrationStep pinExistingInstallToEssentials() {
+        return config -> {
+            if (!config.contains("hooks.home-provider")) {
+                config.set("hooks.home-provider", "essentialsx");
+            }
         };
     }
 

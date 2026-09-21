@@ -85,7 +85,8 @@ class SqlIconStorageTest {
 
         SqlIconStorage reopened = reopen();
         reopened.loadPlayer(alice);
-        // EssentialsX stores home names lowercased, so /sethome Base and /home base are one home.
+        // Every supported provider treats home names case-insensitively, so /sethome Base and
+        // /home base are one home and must share one icon.
         assertEquals("CHEST", reopened.icon(alice, "base"));
         assertEquals("CHEST", reopened.icon(alice, "BASE"));
     }

@@ -4,7 +4,7 @@ main: me.juancayc.polaroidhomes.PolaroidHomesPlugin
 # Paper ignores Spigot's `libraries:` key entirely. The JDBC drivers and the pool are
 # fetched by this loader instead, which is the only mechanism Paper honours.
 loader: me.juancayc.polaroidhomes.PluginLibraryLoader
-description: EssentialsX homes with a custom-icon GUI and teleport effects.
+description: A custom-icon homes GUI with teleport effects, for EssentialsX or HuskHomes.
 author: juancayc
 website: https://github.com/PolaroidStudio/PolaroidHomes
 
@@ -19,9 +19,19 @@ folia-supported: true
 
 dependencies:
   server:
+    # Both home providers are OPTIONAL, and exactly one of them is needed. Neither can be
+    # required: an EssentialsX-only server and a HuskHomes-only server are both valid, and a
+    # required dependency would refuse to load on the other one. The plugin checks for itself
+    # at enable and disables itself when NO provider is present — see
+    # PolaroidHomesPlugin#selectProvider(). BEFORE on both so whichever is installed has
+    # registered its API before this plugin reads it.
     Essentials:
       load: BEFORE
-      required: true
+      required: false
+      join-classpath: true
+    HuskHomes:
+      load: BEFORE
+      required: false
       join-classpath: true
     ModelEngine:
       load: BEFORE

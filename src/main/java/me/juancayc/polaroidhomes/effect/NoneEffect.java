@@ -9,7 +9,7 @@ import org.bukkit.entity.Player;
  *
  * <p>An explicit no-op rather than a null check at every call site: the listener never has to ask
  * whether effects are on, and {@link #warmupTicks} returning zero is what leaves the server's own
- * teleport warmup exactly as EssentialsX configured it.
+ * teleport warmup exactly as the home provider configured it.
  */
 public final class NoneEffect implements TeleportEffect {
 

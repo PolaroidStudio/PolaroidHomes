@@ -23,7 +23,7 @@ general:
   players_only: "<#eb4b30>Only a player can use this command."
   player_not_found: "<#eb4b30>Player <#f2c42f>%player%<#eb4b30> was not found."
   reloaded: "<#95d027>Configuration reloaded."
-  essentials_missing: "<#eb4b30>EssentialsX is not available, so homes cannot be read."
+  provider_missing: "<#eb4b30><#f2c42f>%provider%<#eb4b30> is not available, so homes cannot be read."
 
 homes:
   none: "<#E9FDFB>You have no homes yet. Use <#f2c42f>/sethome <name><#E9FDFB> to set one."
@@ -78,12 +78,22 @@ menu:
         - "<#E9FDFB>Nothing is set here yet."
         - ""
         - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ sᴇᴛ ᴀ ʜᴏᴍᴇ"
+    # Shown when the home plugin can name the rank that unlocks the slot.
     locked:
       name: "<#9b336e>ʟᴏᴄᴋᴇᴅ sʟᴏᴛ"
       lore:
         - "<#E9FDFB>Unlocks at <#b6c1ec>%group%"
         - ""
-        - "<#315a7a>Ranks are managed by EssentialsX."
+        - "<#315a7a>Ranks are managed by your home plugin."
+    # Shown instead when the home plugin has no ranks to name — HuskHomes resolves a
+    # limit from numeric permissions and keeps no list of the ranks granting them.
+    # Do not add %group% here: there is no value to put in it.
+    locked_unattributed:
+      name: "<#9b336e>ʟᴏᴄᴋᴇᴅ sʟᴏᴛ"
+      lore:
+        - "<#E9FDFB>You have not unlocked this slot."
+        - ""
+        - "<#315a7a>Home limits are managed by your home plugin."
     filler:
       name: ""
     previous_page:
@@ -106,7 +116,7 @@ menu:
       lore:
         - "<#E9FDFB>Page <#b6c1ec>%page%<#E9FDFB> of <#b6c1ec>%pages%"
         - ""
-        - "<#315a7a>Your limit comes from EssentialsX."
+        - "<#315a7a>Your limit comes from your home plugin."
   icons:
     title: "<dark_gray><b>ɪᴄᴏɴ ғᴏʀ %home%"
     choice:

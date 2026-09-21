@@ -8,12 +8,13 @@ import me.juancayc.polaroidhomes.config.migration.ConfigMigrations;
 import me.juancayc.polaroidhomes.effect.ModelEngineEffect;
 import me.juancayc.polaroidhomes.effect.TeleportEffect;
 import me.juancayc.polaroidhomes.effect.TeleportEffectFactory;
-import me.juancayc.polaroidhomes.essentials.EssentialsBridge;
 import me.juancayc.polaroidhomes.icon.IconStorage;
 import me.juancayc.polaroidhomes.icon.LegacyIconImport;
 import me.juancayc.polaroidhomes.icon.SqlIconStorage;
 import me.juancayc.polaroidhomes.item.ItemManager;
 import me.juancayc.polaroidhomes.listener.EffectMarkerSweepListener;
+import me.juancayc.polaroidhomes.listener.HuskHomesIconLifecycleListener;
+import me.juancayc.polaroidhomes.listener.HuskHomesTeleportListener;
 import me.juancayc.polaroidhomes.listener.IconCacheListener;
 import me.juancayc.polaroidhomes.listener.IconLifecycleListener;
 import me.juancayc.polaroidhomes.listener.MenuItemCleanupListener;
@@ -24,6 +25,9 @@ import me.juancayc.polaroidhomes.menu.MenuContext;
 import me.juancayc.polaroidhomes.menu.MenuItemMarker;
 import me.juancayc.polaroidhomes.menu.MenuItems;
 import me.juancayc.polaroidhomes.menu.MenuRegistry;
+import me.juancayc.polaroidhomes.provider.HomeProvider;
+import me.juancayc.polaroidhomes.provider.HomeProviders;
+import me.juancayc.polaroidhomes.provider.ProviderSelection;
 import me.juancayc.polaroidhomes.storage.DatabaseManager;
 import me.juancayc.polaroidhomes.storage.StorageException;
 import me.juancayc.polaroidhomes.storage.StorageSettings;
@@ -33,6 +37,7 @@ import me.juancayc.polaroidhomes.text.MiniMessageFactory;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
+import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.scheduler.BukkitTask;
@@ -47,7 +52,8 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
     private PluginConfig config;
     private MenuConfig menus;
     private MessageService messages;
-    private EssentialsBridge essentials;
+    private HomeProvider provider;
+    private String selectedProviderRequest;
     private DatabaseManager database;
     private SqlIconStorage icons;
     private IconCacheListener iconCache;
@@ -56,7 +62,13 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
     private MenuItemMarker marker;
     private MenuContext menuContext;
     private TeleportEffect effect;
-    private TeleportListener teleportListener;
+    /**
+     * The provider-specific teleport listener, kept only so a reload can unregister it.
+     *
+     * <p>Typed as Listener because the two providers have unrelated listener classes: the effects the
+     * plugin plays are the same, but the event chains they hang off share no supertype.
+     */
+    private Listener teleportListener;
     private BukkitTask saveTask;
 
     @Override
@@ -76,7 +88,10 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
         // Read after config.yml so a migrated max-displayed-slots is already on disk in menu.yml.
         this.menus = new MenuConfig(this);
         this.messages = new MessageService(this);
-        this.essentials = new EssentialsBridge(this);
+        if (!selectProvider()) {
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
         if (!openStorage()) {
             getServer().getPluginManager().disablePlugin(this);
             return;
@@ -84,14 +99,6 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
         this.items = ItemManager.withDefaultHooks();
         this.registry = new MenuRegistry(this);
         this.marker = new MenuItemMarker(this);
-
-        if (!essentials.isAvailable()) {
-            // Declared required in paper-plugin.yml, so reaching here means an operator disabled it
-            // at runtime. Refusing to enable is honest: every feature of this plugin reads from it.
-            getLogger().severe("EssentialsX is not enabled. PolaroidHomes cannot run without it.");
-            getServer().getPluginManager().disablePlugin(this);
-            return;
-        }
 
         rebuildContext();
         this.effect = TeleportEffectFactory.create(this, config);
@@ -117,9 +124,7 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
             // accumulate across reloads.
             effect.shutdown();
         }
-        if (teleportListener != null) {
-            teleportListener.clear();
-        }
+        clearTeleportListener();
         if (icons != null) {
             try {
                 icons.close();
@@ -132,6 +137,42 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
             database.close();
             database = null;
         }
+    }
+
+    /**
+     * Resolves {@code hooks.home-provider} against the plugins actually installed.
+     *
+     * <p>Run before storage opens, because a server with no home backend has nothing for this plugin
+     * to do and should not pay for a connection pool on its way to being disabled.
+     *
+     * <p>Every failure is logged as SEVERE with the file, the key and the values that would work,
+     * because the operator reading it is looking at a server that just refused to enable a plugin.
+     * Nothing falls back silently: that is the bug this whole abstraction exists to prevent — the
+     * plugin used to assume EssentialsX, read an empty home list from it on a HuskHomes server, and
+     * render a perfectly correct empty grid while the player's real homes sat in another plugin.
+     *
+     * @return false when no usable provider was found, which is fatal
+     */
+    private boolean selectProvider() {
+        this.selectedProviderRequest = config.homeProvider();
+        List<HomeProvider> candidates = HomeProviders.candidates(this);
+        ProviderSelection selection =
+                ProviderSelection.resolve(selectedProviderRequest, candidates);
+        String line = selection.describe(candidates);
+        if (!selection.isResolved()) {
+            getLogger().severe(line);
+            return false;
+        }
+        this.provider = selection.chosen();
+        getLogger().info(line);
+        if (!provider.supportsTiers()) {
+            // Said once, at enable, rather than left for an operator to discover from a menu that
+            // looks like it lost a feature.
+            getLogger().info(provider.pluginName() + " does not expose the ranks that grant home "
+                    + "limits, so locked slots will not name one. Home limits still come from "
+                    + provider.pluginName() + " itself.");
+        }
+        return true;
     }
 
     /**
@@ -170,7 +211,7 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
     private void rebuildContext() {
         MenuItems menuItems = new MenuItems(items, messages, marker, getLogger());
         this.menuContext = new MenuContext(this, config, menus, messages, items, menuItems,
-                registry, essentials, icons);
+                registry, provider, icons);
     }
 
     private void registerListeners() {
@@ -178,13 +219,15 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
                 new MenuListener(this, registry, marker), this);
         getServer().getPluginManager().registerEvents(
                 new MenuItemCleanupListener(marker), this);
-        getServer().getPluginManager().registerEvents(
-                new IconLifecycleListener(icons), this);
+        // Only the selected provider's listeners are registered. Registering both would need the
+        // other provider's event classes to resolve, which fails with a NoClassDefFoundError on a
+        // server that does not have that plugin installed.
+        getServer().getPluginManager().registerEvents(iconLifecycleListener(), this);
 
         this.iconCache = new IconCacheListener(this, icons);
         getServer().getPluginManager().registerEvents(iconCache, this);
 
-        this.teleportListener = new TeleportListener(this, config, effect);
+        this.teleportListener = teleportListener();
         getServer().getPluginManager().registerEvents(teleportListener, this);
 
         if (effect instanceof ModelEngineEffect modelEngine) {
@@ -192,6 +235,35 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
             // nothing that could be orphaned.
             getServer().getPluginManager().registerEvents(
                     new EffectMarkerSweepListener(modelEngine), this);
+        }
+    }
+
+    /**
+     * The icon-lifecycle listener for the selected provider.
+     *
+     * <p>Split by provider because neither backend has a common event model: EssentialsX announces a
+     * rename through one {@code HomeModifyEvent} with a cause, and HuskHomes leaves it to be inferred
+     * from the before-and-after homes on a {@code HomeEditEvent}. A single listener would have to
+     * reference both, and a class referencing an absent plugin's events cannot be loaded.
+     */
+    private Listener iconLifecycleListener() {
+        return "huskhomes".equals(provider.id())
+                ? new HuskHomesIconLifecycleListener(icons)
+                : new IconLifecycleListener(icons);
+    }
+
+    private Listener teleportListener() {
+        return "huskhomes".equals(provider.id())
+                ? new HuskHomesTeleportListener(this, config, effect)
+                : new TeleportListener(this, config, effect);
+    }
+
+    /** Both listeners hold a pending set that must not survive the effect they decorate. */
+    private void clearTeleportListener() {
+        if (teleportListener instanceof TeleportListener essentials) {
+            essentials.clear();
+        } else if (teleportListener instanceof HuskHomesTeleportListener husk) {
+            husk.clear();
         }
     }
 
@@ -258,6 +330,7 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
         menus.reload();
         messages.reload();
         warnIfBackendChanged();
+        warnIfProviderChanged();
 
         // The old effect is shut down before the new one exists, so its markers are removed while
         // the object that knows about them is still the live one.
@@ -266,10 +339,12 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
         }
         if (teleportListener != null) {
             HandlerList.unregisterAll(teleportListener);
-            teleportListener.clear();
+            clearTeleportListener();
         }
         this.effect = TeleportEffectFactory.create(this, config);
-        this.teleportListener = new TeleportListener(this, config, effect);
+        // Rebuilt for the SAME provider deliberately: the provider is fixed for the session, so a
+        // reload only ever swaps which effect the listener plays, never which events it listens to.
+        this.teleportListener = teleportListener();
         getServer().getPluginManager().registerEvents(teleportListener, this);
 
         rebuildContext();
@@ -300,30 +375,79 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
     }
 
     /**
+     * Warns when an operator changed the home provider without restarting.
+     *
+     * <p>The selection is not reapplied. The listeners registered for a provider reference that
+     * plugin's event classes, and the icons already in the store are keyed to the home names that
+     * backend gave out; switching mid-session would leave live listeners for one backend, a menu
+     * reading another, and icons attributed to whichever was in use when they were picked. A restart
+     * is the honest answer, exactly as it is for a changed database.
+     */
+    private void warnIfProviderChanged() {
+        if (!config.homeProvider().equalsIgnoreCase(selectedProviderRequest)) {
+            getLogger().warning("hooks.home-provider now reads '" + config.homeProvider()
+                    + "', but " + provider.pluginName() + " is still in use. Restart the server to "
+                    + "apply the change; stored icons are keyed to the home names of the backend "
+                    + "they were chosen under.");
+        }
+    }
+
+    /**
      * Opens the homes grid for a viewer, showing the target's homes.
      *
-     * <p>A target whose rows are not cached — an admin viewing an offline player — is loaded off
-     * the main thread first, and the window is only built once the icons are there. Opening
-     * immediately would render every home with the default icon and look like data loss.
+     * <p>Two things have to be in memory before an inventory can be built, and neither can be read on
+     * the render path. The icons come from SQL, which blocks; the homes come from the provider, which
+     * for HuskHomes answers with a future its own documentation forbids blocking on. So both are
+     * resolved first and the window is opened in the callback — the icon load was already doing this,
+     * and the home read now rides the same pattern.
+     *
+     * <p>A synchronous provider costs nothing extra here: EssentialsX hands back an already-completed
+     * future, so its {@code thenAccept} runs inline on the calling thread and the window opens in the
+     * same tick the command was typed.
      */
     public void openHomesMenu(Player viewer, OfflinePlayer target) {
         if (icons.isLoaded(target.getUniqueId())) {
-            registry.open(viewer, new HomesMenu(menuContext, viewer, target, this::teleportHome));
+            openWithSnapshot(viewer, target);
             return;
         }
         iconCache.loadAsync(target.getUniqueId(), () -> {
             if (viewer.isOnline()) {
-                registry.open(viewer, new HomesMenu(menuContext, viewer, target, this::teleportHome));
+                openWithSnapshot(viewer, target);
             }
         });
     }
 
     /**
-     * Runs the teleport through EssentialsX so its warmup, cooldown and event chain stay intact.
+     * Reads the homes, then opens the window on the main thread.
+     *
+     * <p>The hop back through the scheduler is not optional: the provider's future may complete on its
+     * own executor, and {@code Bukkit.createInventory} plus {@code openInventory} are main-thread-only.
+     * {@code isPrimaryThread} keeps the synchronous provider's inline completion from paying for a
+     * scheduler round trip it does not need.
+     */
+    private void openWithSnapshot(Player viewer, OfflinePlayer target) {
+        provider.snapshot(viewer, target).thenAccept(snapshot -> onMainThread(() -> {
+            if (viewer.isOnline()) {
+                registry.open(viewer,
+                        new HomesMenu(menuContext, viewer, target, snapshot, this::teleportHome));
+            }
+        }));
+    }
+
+    private void onMainThread(Runnable action) {
+        if (getServer().isPrimaryThread()) {
+            action.run();
+        } else {
+            getServer().getScheduler().runTask(this, action);
+        }
+    }
+
+    /**
+     * Runs the teleport through the provider so its warmup, cooldown and event chain stay intact.
      * The effects hang off that chain, so bypassing it would silence them too.
      */
     public void teleportHome(Player player, String home) {
-        if (!essentials.teleportHome(player, home)) {
+        if (!provider.teleport(player, home)) {
             messages.send(player, "homes.teleport_failed", "%home%", MessageService.escape(home));
         }
     }
@@ -332,8 +456,8 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
         return messages;
     }
 
-    public EssentialsBridge essentials() {
-        return essentials;
+    public HomeProvider provider() {
+        return provider;
     }
 
     public PluginConfig config() {

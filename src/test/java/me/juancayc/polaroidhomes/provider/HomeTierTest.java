@@ -1,4 +1,4 @@
-package me.juancayc.polaroidhomes.essentials;
+package me.juancayc.polaroidhomes.provider;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

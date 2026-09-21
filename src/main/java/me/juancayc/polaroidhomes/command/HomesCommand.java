@@ -51,30 +51,6 @@ public final class HomesCommand implements BasicCommand {
             return;
         }
 
-        if (args.length > 0 && args[0].equalsIgnoreCase("debug")) {
-            if (!sender.hasPermission("polaroidhomes.admin")) {
-                messages.send(sender, "general.no_permission");
-                return;
-            }
-            if (!(sender instanceof Player self)) {
-                messages.send(sender, "general.players_only");
-                return;
-            }
-            // Second diagnostic round: the first proved getHomes() returns empty while the limit
-            // and tiers read correctly, so this one reports which EssentialsX build is answering
-            // and what the concrete User type actually is.
-            var bridge = plugin.essentials();
-            var ess = org.bukkit.Bukkit.getPluginManager().getPlugin("Essentials");
-            sender.sendMessage("[PH] Essentials version: "
-                    + (ess == null ? "null" : ess.getPluginMeta().getVersion()));
-            Object u = bridge.userObject(self);
-            sender.sendMessage("[PH] user class: " + (u == null ? "null" : u.getClass().getName()));
-            sender.sendMessage("[PH] getHomes(): " + bridge.homes(self));
-            sender.sendMessage("[PH] reflective getHomes(): " + bridge.homesReflective(self));
-            sender.sendMessage("[PH] userdata file homes: " + bridge.homesFromDisk(self));
-            return;
-        }
-
         if (args.length > 0 && args[0].equalsIgnoreCase("help")) {
             sendHelp(sender);
             return;
@@ -88,8 +64,9 @@ public final class HomesCommand implements BasicCommand {
             messages.send(player, "general.no_permission");
             return;
         }
-        if (!plugin.essentials().isAvailable()) {
-            messages.send(player, "general.essentials_missing");
+        if (!plugin.provider().isAvailable()) {
+            messages.send(player, "general.provider_missing",
+                    "%provider%", plugin.provider().pluginName());
             return;
         }
 
@@ -99,9 +76,9 @@ public final class HomesCommand implements BasicCommand {
                 messages.send(player, "general.no_permission");
                 return;
             }
-            // Only an online player is accepted: home limits resolve through Bukkit permissions,
-            // which are not reliably available for somebody who is not connected, and a menu built
-            // on a guessed limit would show the wrong locked slots.
+            // Only an online player is accepted: every provider resolves the home limit through
+            // Bukkit permissions, which are not reliably available for somebody who is not
+            // connected, and a menu built on a guessed limit would show the wrong locked slots.
             Player other = Bukkit.getPlayerExact(args[0]);
             if (other == null) {
                 messages.send(player, "general.player_not_found",
@@ -147,9 +124,6 @@ public final class HomesCommand implements BasicCommand {
         if (sender.hasPermission("polaroidhomes.admin")) {
             if ("reload".startsWith(prefix)) {
                 suggestions.add("reload");
-            }
-            if ("debug".startsWith(prefix)) {
-                suggestions.add("debug");
             }
             for (Player online : Bukkit.getOnlinePlayers()) {
                 if (online.getName().toLowerCase(Locale.ROOT).startsWith(prefix)) {

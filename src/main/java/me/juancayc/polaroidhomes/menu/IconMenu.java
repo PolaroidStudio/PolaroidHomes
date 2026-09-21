@@ -145,7 +145,7 @@ public final class IconMenu extends MenuHolder {
                         // change.
                         context.registry().open(player,
                                 new HomesMenu(context, player, Bukkit.getOfflinePlayer(targetId),
-                                        parent.teleportAction()));
+                                        parent.snapshot(), parent.teleportAction()));
                     });
                 }
                 default -> {

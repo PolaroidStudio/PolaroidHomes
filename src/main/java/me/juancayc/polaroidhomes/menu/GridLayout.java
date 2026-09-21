@@ -3,9 +3,9 @@ package me.juancayc.polaroidhomes.menu;
 /**
  * Paging arithmetic for the homes menu.
  *
- * <p>Deliberately Bukkit-free. The failure this class prevents is a server whose EssentialsX
- * config declares an enormous or effectively unlimited tier, which would otherwise ask the menu to
- * render more slots than the layout can page through. Keeping the arithmetic in a plain type means
+ * <p>Deliberately Bukkit-free. The failure this class prevents is a home provider reporting an
+ * enormous or effectively unlimited limit, which would otherwise ask the menu to render more slots
+ * than the layout can page through. Keeping the arithmetic in a plain type means
  * the rule runs in a unit test on every build rather than depending on somebody remembering to try
  * it against a misconfigured server.
  *
@@ -28,7 +28,8 @@ public record GridLayout(int rows, int visibleSlots, int slotsPerPage) {
      * would otherwise leave declared home slots permanently blank.
      *
      * @param template          the validated layout
-     * @param highestTier       the largest home limit any EssentialsX group grants
+     * @param highestTier       the largest home limit any configured rank grants, or the viewer's own
+     *                          limit when the provider reports no ranks
      * @param maxDisplayedSlots {@code max-displayed-slots} from menu.yml
      */
     public static GridLayout of(MenuTemplate template, int highestTier, int maxDisplayedSlots) {

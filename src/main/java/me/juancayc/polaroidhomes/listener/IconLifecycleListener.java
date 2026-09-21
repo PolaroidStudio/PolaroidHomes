@@ -11,9 +11,11 @@ import org.bukkit.event.Listener;
 import java.util.UUID;
 
 /**
- * Keeps stored icons in step with the homes they belong to.
+ * Keeps stored icons in step with EssentialsX's homes. The EssentialsX half of
+ * {@link HuskHomesIconLifecycleListener}; only the listener matching the selected provider is
+ * registered.
  *
- * <p>Icons are this plugin's own storage, keyed by home name, because EssentialsX exposes no
+ * <p>Icons are this plugin's own storage, keyed by home name, because neither backend exposes a
  * metadata API to hang one off. That key is exactly what breaks when a home is renamed or deleted:
  * without this listener {@code /delhome base} leaves a row nothing will ever read, and
  * {@code /renamehome base cabin} leaves the icon on the old name while the renamed home silently

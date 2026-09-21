@@ -33,6 +33,8 @@ public final class PluginConfig {
 
     private long saveIntervalTicks;
 
+    private String homeProvider;
+
     public PluginConfig(Plugin plugin) {
         this.plugin = plugin;
         reload();
@@ -41,6 +43,10 @@ public final class PluginConfig {
     public void reload() {
         plugin.reloadConfig();
         FileConfiguration config = plugin.getConfig();
+
+        // Read as written, and resolved against what is installed by HomeProviders. Validating a
+        // name here would need the plugin list, which this type deliberately knows nothing about.
+        this.homeProvider = config.getString("hooks.home-provider", "auto");
 
         this.defaultIcon = config.getString("gui.default-icon", "LIGHT_BLUE_BED");
         this.emptySlotIcon = config.getString("gui.empty-slot-icon", "LIME_STAINED_GLASS_PANE");
@@ -89,6 +95,17 @@ public final class PluginConfig {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    /**
+     * The raw {@code hooks.home-provider} value.
+     *
+     * <p>Not re-read on reload in any way that matters: the provider is chosen once on enable and the
+     * listeners registered for it cannot be swapped without a restart, so changing this key mid-session
+     * takes effect on the next start. See {@code PolaroidHomesPlugin#warnIfProviderChanged}.
+     */
+    public String homeProvider() {
+        return homeProvider;
     }
 
     public String defaultIcon() {

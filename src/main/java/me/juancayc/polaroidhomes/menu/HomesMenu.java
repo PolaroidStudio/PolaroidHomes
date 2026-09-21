@@ -1,6 +1,7 @@
 package me.juancayc.polaroidhomes.menu;
 
-import me.juancayc.polaroidhomes.essentials.HomeTier;
+import me.juancayc.polaroidhomes.provider.HomeSnapshot;
+import me.juancayc.polaroidhomes.provider.HomeTier;
 import me.juancayc.polaroidhomes.text.MessageService;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -25,8 +26,14 @@ import java.util.UUID;
  *
  * <p>The grid is sized at the server's maximum rather than at the viewer's own limit, so a player
  * can see what the ranks above them unlock. {@link GridLayout} caps that at
- * {@code max-displayed-slots} in menu.yml, which is what keeps an "unlimited" EssentialsX tier from
- * asking for more slots than the layout can page through.
+ * {@code max-displayed-slots} in menu.yml, which is what keeps an "unlimited" tier from asking for
+ * more slots than the layout can page through. A provider with no tiers reports none, so that
+ * maximum is simply the viewer's own limit and the grid holds no locked slots at all.
+ *
+ * <p>The homes, the limit and the tiers are read from a {@link HomeSnapshot} taken before the window
+ * opened, never from the provider during a render. That is what lets an asynchronous backend work:
+ * HuskHomes answers with a future the render path cannot wait on. It also means the grid reflects the
+ * moment it was opened — a home created while the menu is up appears on the next open.
  */
 public final class HomesMenu extends MenuHolder {
 
@@ -35,6 +42,7 @@ public final class HomesMenu extends MenuHolder {
     private final String targetName;
     private final boolean ownWindow;
     private final HomeAction onTeleport;
+    private final HomeSnapshot snapshot;
 
     // Fixed for the lifetime of the window: the inventory is sized from the template at
     // construction, so a mid-life change would produce a slot map the open window cannot hold. A
@@ -50,23 +58,18 @@ public final class HomesMenu extends MenuHolder {
         void run(Player viewer, String home);
     }
 
-    public HomesMenu(MenuContext context, Player viewer, OfflinePlayer target, HomeAction onTeleport) {
+    public HomesMenu(MenuContext context, Player viewer, OfflinePlayer target,
+                     HomeSnapshot snapshot, HomeAction onTeleport) {
         this.context = context;
         this.targetId = target.getUniqueId();
         this.targetName = target.getName() == null ? targetId.toString() : target.getName();
         this.ownWindow = viewer.getUniqueId().equals(targetId);
         this.onTeleport = onTeleport;
+        this.snapshot = snapshot;
         this.template = context.menus().homes();
-        this.layout = computeLayout(viewer);
+        this.layout = GridLayout.of(template, snapshot.highestLimit(),
+                context.menus().maxDisplayedSlots());
         setInventory(createInventory(viewer));
-    }
-
-    private GridLayout computeLayout(Player viewer) {
-        List<HomeTier> tiers = context.essentials().tiers();
-        // The fallback matters: with no tiers configured at all, the viewer's own resolved limit is
-        // still a real number and still deserves a grid.
-        int highest = HomeTier.highestLimit(tiers, context.essentials().homeLimit(viewer));
-        return GridLayout.of(template, highest, context.menus().maxDisplayedSlots());
     }
 
     private Inventory createInventory(Player viewer) {
@@ -166,9 +169,8 @@ public final class HomesMenu extends MenuHolder {
     }
 
     private ItemStack info(MenuTemplate.ElementDefinition definition, int pages) {
-        Player target = Bukkit.getPlayer(targetId);
-        int used = target == null ? 0 : context.essentials().homes(target).size();
-        int limit = target == null ? 0 : context.essentials().homeLimit(target);
+        int used = snapshot.homes().size();
+        int limit = snapshot.limit();
         return context.items().element(definition, "PAPER",
                 "menu.homes.info.name", "menu.homes.info.lore", Material.PAPER,
                 "%used%", String.valueOf(used),
@@ -179,10 +181,9 @@ public final class HomesMenu extends MenuHolder {
     }
 
     private void drawHomes(Player viewer, Inventory inventory) {
-        Player target = ownWindow ? viewer : Bukkit.getPlayer(targetId);
-        List<String> homes = target == null ? List.of() : context.essentials().homes(target);
-        int limit = target == null ? 0 : context.essentials().homeLimit(target);
-        List<HomeTier> tiers = context.essentials().tiers();
+        List<String> homes = snapshot.homes();
+        int limit = snapshot.limit();
+        List<HomeTier> tiers = snapshot.tiers();
 
         List<Integer> positions = template.homeSlots();
         int first = layout.firstIndexOfPage(page);
@@ -192,7 +193,7 @@ public final class HomesMenu extends MenuHolder {
             int index = first + offset;
             int slot = positions.get(offset);
             if (index < homes.size()) {
-                drawHome(inventory, slot, target, homes.get(index));
+                drawHome(inventory, slot, homes.get(index));
             } else if (index < limit) {
                 drawEmptySlot(inventory, slot);
             } else {
@@ -201,12 +202,12 @@ public final class HomesMenu extends MenuHolder {
         }
     }
 
-    private void drawHome(Inventory inventory, int slot, Player target, String home) {
+    private void drawHome(Inventory inventory, int slot, String home) {
         String reference = context.icons().icon(targetId, home);
         if (reference == null) {
             reference = context.config().defaultIcon();
         }
-        Location location = target == null ? null : context.essentials().home(target, home);
+        Location location = snapshot.location(home);
         // The status word is server text and may carry its own colour tags, so it is substituted
         // as-is. A world name is not: it is escaped, because only the untrusted side needs it and
         // escaping the status word would print its tags as literal text.
@@ -267,21 +268,36 @@ public final class HomesMenu extends MenuHolder {
         });
     }
 
+    /**
+     * Draws a slot the target has not unlocked.
+     *
+     * <p>Two shapes, chosen by whether the provider can name ranks at all. With tiers, the lore names
+     * the cheapest rank that would reach this slot, which is the whole point of showing the slot. With
+     * a provider that has no tier concept — HuskHomes resolves a limit from numeric permissions and
+     * keeps no list of the ranks granting them — naming one would mean inventing it, so a shorter
+     * layout is used that says the slot is locked and stops there. Degrading to
+     * {@code "unlocked by: None"} would read as a misconfiguration rather than as a backend that
+     * simply does not have the information.
+     */
     private void drawLockedSlot(Inventory inventory, int slot, List<HomeTier> tiers, int index) {
         HomeTier unlocking = HomeTier.unlockingSlot(tiers, index);
-        // A group name comes from EssentialsX's config, not from a player, but it is escaped
-        // anyway: an operator who names a group after a MiniMessage tag should get a strange label,
-        // not a lore line that recolours the rest of the menu.
-        String group = unlocking == null
-                ? context.messages().raw("status.none", "<#315a7a>None")
-                : MessageService.escape(unlocking.group());
-
+        if (unlocking == null) {
+            inventory.setItem(slot, context.items().button(
+                    context.config().lockedSlotIcon(),
+                    "menu.homes.locked_unattributed.name",
+                    "menu.homes.locked_unattributed.lore",
+                    Material.IRON_BARS));
+            return;
+        }
+        // A group name comes from the backend's config, not from a player, but it is escaped anyway:
+        // an operator who names a group after a MiniMessage tag should get a strange label, not a lore
+        // line that recolours the rest of the menu.
         inventory.setItem(slot, context.items().button(
                 context.config().lockedSlotIcon(),
                 "menu.homes.locked.name",
                 "menu.homes.locked.lore",
                 Material.IRON_BARS,
-                "%group%", group));
+                "%group%", MessageService.escape(unlocking.group())));
 
         // No handler: a locked slot does nothing, so it also stays silent. A click sound on a
         // button that refuses the click reads as a malfunction.
@@ -294,5 +310,16 @@ public final class HomesMenu extends MenuHolder {
     /** Lets a child window build a replacement grid that teleports the same way this one does. */
     public HomeAction teleportAction() {
         return onTeleport;
+    }
+
+    /**
+     * Lets the icon picker rebuild this grid without going back to the provider.
+     *
+     * <p>Reusing the snapshot is correct here and cheaper: picking an icon changes this plugin's own
+     * store, never the backend's homes, so the list, the limit and the tiers behind the window it
+     * returns to are unchanged.
+     */
+    public HomeSnapshot snapshot() {
+        return snapshot;
     }
 }

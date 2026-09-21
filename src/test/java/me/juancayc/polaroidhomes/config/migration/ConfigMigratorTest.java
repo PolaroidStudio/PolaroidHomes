@@ -205,12 +205,40 @@ class ConfigMigratorTest {
 
     @Test
     void theShippedRegistryTargetsTheVersionThisJarShips() {
-        // config.yml is at 2: max-displayed-slots moved into menu.yml and gui.rows became the row
-        // strings there. The other files never needed restructuring, so they stay at the baseline.
-        assertEquals(2, ConfigMigrations.config().targetVersion());
+        // config.yml is at 3: v2 moved max-displayed-slots into menu.yml and turned gui.rows into the
+        // row strings there, v3 added the hooks section that names the home provider. The other files
+        // never needed restructuring, so they stay at the baseline.
+        assertEquals(3, ConfigMigrations.config().targetVersion());
         assertEquals(1, ConfigMigrations.menu().targetVersion());
         assertEquals(1, ConfigMigrations.data().targetVersion());
         assertEquals(1, ConfigMigrations.messages().targetVersion());
+    }
+
+    @Test
+    void theHooksStepPinsAnExistingInstallToEssentials() {
+        // A file coming from v2 was written by a build where EssentialsX was a hard dependency, so
+        // that is provably the backend its stored icons are keyed against. Leaving it on the shipped
+        // 'auto' would keep working today and silently change backend the day HuskHomes is installed.
+        YamlConfiguration config = defaults("config-version: 2\n");
+
+        ConfigMigrations.pinExistingInstallToEssentials().apply(config);
+
+        assertEquals("essentialsx", config.getString("hooks.home-provider"));
+    }
+
+    @Test
+    void theHooksStepLeavesAnOperatorsOwnChoiceAlone() {
+        // The step must be idempotent and must never overwrite a value. Running twice, or running on
+        // a file an operator already edited, has to keep what they wrote.
+        YamlConfiguration config = defaults("""
+                config-version: 2
+                hooks:
+                  home-provider: huskhomes
+                """);
+
+        ConfigMigrations.pinExistingInstallToEssentials().apply(config);
+
+        assertEquals("huskhomes", config.getString("hooks.home-provider"));
     }
 
     @Test

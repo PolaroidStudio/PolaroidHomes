@@ -4,12 +4,15 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-95d027)](LICENSE)
 [![Paper](https://img.shields.io/badge/paper-1.21%2B-289bd0)](https://papermc.io/)
 [![Java](https://img.shields.io/badge/java-21-f2c42f)](https://adoptium.net/)
-[![EssentialsX](https://img.shields.io/badge/EssentialsX-required-eb4b30)](https://essentialsx.net/)
+[![EssentialsX or HuskHomes](https://img.shields.io/badge/EssentialsX%20or%20HuskHomes-required-f2c42f)](https://essentialsx.net/)
 [![Model Engine](https://img.shields.io/badge/Model%20Engine-optional-6f6085)](https://www.mythiccraft.io/index.php?resources/model-engine.2440/)
 
-A visual layer over EssentialsX homes. It gives players a menu of their homes with an icon they
+A visual layer over somebody else's homes. It gives players a menu of their homes with an icon they
 choose for each one, shows the slots their rank has not unlocked yet, and plays an effect when a
 home teleport starts and when it arrives.
+
+The homes themselves come from **EssentialsX or HuskHomes** — whichever you already run. This plugin
+never owns a home or a home limit; it reads them from the plugin that does.
 
 ## What it does
 
@@ -27,15 +30,16 @@ at the destination. Either a Model Engine animation or vanilla particles, or not
 
 ### What it deliberately does not do
 
-**It does not manage home limits.** EssentialsX already resolves a player's limit from its own
-`sethome-multiple` groups and the matching `essentials.sethome.multiple.<group>` permissions. This
-plugin reads that answer and never stores or grants a limit of its own, which is also why it needs
-no permissions-plugin integration: the permissions are already resolved through Bukkit by the time
-EssentialsX answers. To give a rank more homes, edit EssentialsX's configuration.
+**It does not manage home limits.** Your home plugin already resolves a player's limit — EssentialsX
+from its `sethome-multiple` groups and the matching `essentials.sethome.multiple.<group>` permissions,
+HuskHomes from numeric `huskhomes.max_homes.<n>` permissions. This plugin reads that answer and never
+stores or grants a limit of its own, which is also why it needs no permissions-plugin integration: the
+permissions are already resolved through Bukkit by the time the home plugin answers. To give a rank
+more homes, edit that plugin's configuration.
 
-**It does not replace `/sethome`, `/delhome` or `/home`.** Those stay EssentialsX's, warmups,
-cooldowns and charges included. The teleport the menu performs runs through EssentialsX's own
-command path so none of that is bypassed.
+**It does not replace `/sethome`, `/delhome` or `/home`.** Those stay with your home plugin, warmups,
+cooldowns and charges included. The teleport the menu performs runs through that plugin's own command
+or API so none of it is bypassed.
 
 ## Requirements
 
@@ -43,15 +47,19 @@ command path so none of that is bypassed.
 |---|---|
 | Server | Paper 1.21 or newer (the `api-version` is a floor, so later lines work too) |
 | Java | 21 |
-| Required | [EssentialsX](https://essentialsx.net/) |
+| Required | **One** of [EssentialsX](https://essentialsx.net/) or [HuskHomes](https://william278.net/project/huskhomes) 4.x |
 | Optional | [Model Engine](https://www.mythiccraft.io/index.php?resources/model-engine.2440/) R4.1.0+, for animated teleport effects |
 | Optional | Nexo, ItemsAdder, Oraxen, HeadDatabase, for custom icons |
+
+Neither home plugin is a hard dependency, so the jar loads on a server with either one. It refuses to
+enable only when **neither** is present, and says so in the console: there is nothing for it to show
+without a home backend.
 
 Folia is supported.
 
 ## Installation
 
-1. Install EssentialsX if it is not already there.
+1. Install EssentialsX or HuskHomes if neither is already there.
 2. Drop `PolaroidHomes-<version>-b<build>.jar` into `plugins/`.
 3. Start the server once to generate `plugins/PolaroidHomes/config.yml` and
    `plugins/PolaroidHomes/lang/messages_en.yml`.
@@ -61,6 +69,62 @@ Folia is supported.
 
 Three files. `config.yml` holds behaviour, `menu.yml` holds the layout of both menus, and every
 player-facing string lives in `lang/messages_<language>.yml` and nowhere else.
+
+### `hooks`
+
+| Key | Meaning |
+|---|---|
+| `home-provider` | `auto`, `essentialsx` or `huskhomes`. Which plugin owns the homes this menu shows. |
+
+`auto` uses whichever supported plugin is installed. If both are, **EssentialsX wins** — it was this
+plugin's only backend before this option existed, so your stored icons were recorded against its home
+names. The order is fixed rather than configurable so that two servers with the same plugins always
+choose the same backend.
+
+Naming a plugin that is not installed is an **error, not a fallback**. The console says so and the
+plugin refuses to enable, rather than quietly reading an empty home list from a different backend —
+which is the exact failure this option was added for: on a HuskHomes server the old build assumed
+EssentialsX, read no homes from it, and rendered a perfectly correct empty grid.
+
+Changing this key needs a **restart**. A reload logs a warning and keeps the current backend: the
+event listeners are registered per provider, and the icons in the store are keyed to the home names of
+whichever backend they were chosen under.
+
+#### Support matrix
+
+| | EssentialsX | HuskHomes |
+|---|---|---|
+| List a player's homes | yes | yes |
+| Home coordinates in the lore | yes | yes, except a home on another server in a proxied network |
+| Home limit | yes | yes |
+| Per-home icons | yes | yes |
+| Icon follows a rename | yes, via `HomeModifyEvent` | yes, via `HomeEditEvent` |
+| Icon dropped on delete | yes, via `HomeModifyEvent` | yes, via `HomeDeleteEvent` |
+| Teleport through the backend's own path | yes, `essentials:home` | yes, its timed-teleport API |
+| Departure and arrival effects | yes | yes |
+| Named ranks on a locked slot | **yes** | no — see below |
+| Warmup stretched to fit the entry animation | **yes** | no — see below |
+| Grid shows slots above the player's own limit | yes | no, there is nothing to attribute them to |
+
+**Named ranks.** EssentialsX enumerates its `sethome-multiple` groups, so a locked slot names the
+cheapest rank that unlocks it. HuskHomes resolves a limit from numeric `huskhomes.max_homes.<n>`
+permissions and keeps no list of the ranks granting them, so there is nothing to read. Rather than
+print "unlocks at None", which reads as a broken config, the menu uses a shorter lore that says the
+slot is locked and stops there. It also sizes the grid to the player's own limit instead of to a
+server maximum that does not exist, so a HuskHomes menu has no locked slots at all.
+
+**Warmup.** EssentialsX's `TeleportWarmupEvent` exposes `setDelay`, so the warmup is lengthened to the
+declared `entry.duration` and the departure animation always finishes before the player moves.
+HuskHomes' own `TeleportWarmupEvent` has `getWarmupDuration()` and **no setter** — the value comes from
+the player's `huskhomes.teleport_warmup.<n>` permission — so there is nothing to write. On HuskHomes
+the effect plays alongside whatever warmup is already configured, and a warmup shorter than
+`entry.duration` cuts the animation off. Set HuskHomes' warmup to at least that duration if you want
+the whole animation.
+
+**Deleting every home at once.** HuskHomes' `DeleteAllHomesEvent` names the owner but not the homes,
+and this plugin's icon store cannot enumerate a player's rows, so those icons are left behind. They are
+harmless — they are keyed to names nothing resolves — and a home recreated under an old name simply
+gets its old icon back.
 
 ### `language`
 
@@ -119,7 +183,7 @@ It lives in `menu.yml`, next to the layout it caps, because it only means anythi
 The grid is sized at the server's maximum, not at the viewer's own limit:
 
 ```
-visibleSlots = min(highest configured EssentialsX tier, max-displayed-slots)
+visibleSlots = min(highest configured rank limit, max-displayed-slots)
 ```
 
 A server that configures `sethome-multiple.vip: 9999`, or a tier named `unlimited`, would otherwise
@@ -173,10 +237,11 @@ Model Engine's `AnimationHandler.playAnimation(...)` returns an animation proper
 and the API exposes no duration getter anywhere. The only runtime signal is
 `hasFinishedAllAnimations()`, which can only be polled after the animation is already running.
 
-The plugin needs the length *before* it starts, because it uses it to extend the EssentialsX
-teleport warmup so the departure animation finishes before the player is moved. Declaring the value
-is the only way to know it in time. The warmup is only ever extended, never shortened: a server
-that configured a longer teleport delay did so deliberately.
+The plugin needs the length *before* it starts, because on EssentialsX it uses it to extend the
+teleport warmup so the departure animation finishes before the player is moved. Declaring the value is
+the only way to know it in time. The warmup is only ever extended, never shortened: a server that
+configured a longer teleport delay did so deliberately. On HuskHomes the warmup cannot be changed at
+all — see the support matrix — so the duration only times the effect there.
 
 A `duration: auto` mode — polling `hasFinishedAllAnimations()` with a hard timeout ceiling — is
 noted in the source as a possible future addition.
@@ -247,8 +312,8 @@ Aliases: `/phomes`, `/homemenu`.
 | `polaroidhomes.icon` | everyone | Changing the icon of your own homes. |
 | `polaroidhomes.admin` | op | Reloading, and opening another player's menu. |
 
-Home limits are **not** granted here. They come from
-`essentials.sethome.multiple.<group>`, which EssentialsX owns.
+Home limits are **not** granted here. They come from your home plugin:
+`essentials.sethome.multiple.<group>` on EssentialsX, `huskhomes.max_homes.<n>` on HuskHomes.
 
 ## Building from source
 

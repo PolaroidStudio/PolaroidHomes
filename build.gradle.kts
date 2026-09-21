@@ -8,7 +8,7 @@ group = "me.juancayc"
 // version comes from gradle.properties — Gradle reads that file's `version` key into
 // project.version automatically, and CI's "Get version" step reads the same key without a
 // second Gradle invocation. Keep it in exactly one place.
-description = "EssentialsX homes with a custom-icon GUI and teleport effects."
+description = "A custom-icon homes GUI with teleport effects, for EssentialsX or HuskHomes."
 
 java {
     toolchain {
@@ -29,6 +29,10 @@ repositories {
     maven {
         name = "essentialsx"
         url = uri("https://repo.essentialsx.net/releases/")
+    }
+    maven {
+        name = "william278"
+        url = uri("https://repo.william278.net/releases")
     }
     maven {
         name = "nexomc"
@@ -57,6 +61,9 @@ dependencies {
     compileOnly("net.essentialsx:EssentialsX:2.21.0") {
         exclude(group = "org.spigotmc", module = "spigot-api")
     }
+    // HuskHomes is the second supported home provider. Its API is async (CompletableFuture), which
+    // is why HomeProvider is async-shaped even though EssentialsX answers synchronously.
+    compileOnly("net.william278.huskhomes:huskhomes-bukkit:4.11")
     compileOnly("com.ticxo.modelengine:ModelEngine:R4.1.0")
 
     // Item providers, resolved through the prefix-based ItemManager. All optional.

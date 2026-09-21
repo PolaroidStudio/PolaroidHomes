@@ -219,7 +219,7 @@ public record MenuTemplate(int rows,
      *
      * <p>The reverse is deliberately not even a warning. Paging buttons on a layout that fits the
      * cap on one page are simply not drawn, and the layout is still correct: how many slots a
-     * player actually sees comes from their EssentialsX tier, and the cap is only the ceiling. A
+     * player actually sees comes from their rank or their own limit, and the cap is only the ceiling. A
      * warning there would fire on the shipped default.
      *
      * <p>One button without the other is an error either way, because it is never what an operator

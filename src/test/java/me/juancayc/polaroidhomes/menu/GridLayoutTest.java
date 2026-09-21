@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * The grid is sized from a value an operator controls in another plugin's config, capped by one they
  * control in menu.yml. The failure mode is a server that refuses to open the menu, or a rank whose
  * slots silently vanish, so these run headless on every build rather than depending on somebody
- * remembering to try a misconfigured EssentialsX.
+ * remembering to try a misconfigured home provider.
  */
 class GridLayoutTest {
 

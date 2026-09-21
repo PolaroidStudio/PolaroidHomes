@@ -1,13 +1,12 @@
 # ---------------------------------------------------------------------------
 # PolaroidHomes
 #
-# EssentialsX stays the owner of homes and of home limits. This plugin never
-# stores a limit and never grants one: it reads whatever EssentialsX resolves
-# for the player from its own `sethome-multiple` section and the matching
-# `essentials.sethome.multiple.<group>` permissions. To give a rank more homes,
-# edit EssentialsX's config, not this one.
+# Another plugin owns the homes and the home limits: this one reads them. It
+# never stores a limit and never grants one. Whichever home plugin is in use
+# resolves the limit from its own configuration and permissions, so to give a
+# rank more homes, edit that plugin's config, not this one.
 #
-# This plugin owns exactly two things: the icon chosen for each home, and the
+# PolaroidHomes owns exactly two things: the icon chosen for each home, and the
 # effect played when a home teleport starts and arrives.
 # ---------------------------------------------------------------------------
 
@@ -15,12 +14,34 @@
 # preserving every value you edited, and backs the original up first. Do not edit
 # this by hand: lowering it re-runs migrations, raising it makes the plugin refuse
 # to touch the file.
-config-version: 2
+config-version: 3
 
 # Language file loaded from lang/messages_<language>.yml. Any key missing from
 # that file falls back to the English one shipped inside the jar, so a partial
 # translation never shows a raw key to a player.
 language: en
+
+hooks:
+  # Which plugin owns the homes this menu shows.
+  #
+  #   auto          use whichever supported plugin is installed. If both are,
+  #                 EssentialsX wins, because it was this plugin's only backend
+  #                 before this option existed and your stored icons were
+  #                 recorded against its home names.
+  #   essentialsx   EssentialsX
+  #   huskhomes     HuskHomes
+  #
+  # Naming a plugin that is not installed is an error, not a fallback: the
+  # plugin says so in the console and refuses to enable rather than quietly
+  # reading an empty home list from a different backend. With no supported
+  # plugin installed at all it also refuses to enable, because there is nothing
+  # for it to show.
+  #
+  # Not every backend supports everything. EssentialsX can name the rank that
+  # unlocks a locked slot and can have its teleport warmup stretched to fit the
+  # entry animation; HuskHomes can do neither, so a locked slot there simply
+  # reads as locked and the animation plays alongside HuskHomes' own warmup.
+  home-provider: auto
 
 # Where the menus are laid out: which rows exist, which slot holds which
 # button, and how each button looks. That all lives in menu.yml, together with
@@ -43,8 +64,9 @@ gui:
   # suggests /sethome in chat.
   empty-slot-icon: LIME_STAINED_GLASS_PANE
 
-  # Item shown for a slot the player has not unlocked. Its lore names the first
-  # EssentialsX group whose limit would cover that slot.
+  # Item shown for a slot the player has not unlocked. With EssentialsX its lore
+  # names the first group whose limit would cover that slot; with HuskHomes,
+  # which has no enumerable ranks, it just reads as locked.
   locked-slot-icon: IRON_BARS
 
   # Filler behind everything. hide-tooltip matters: an empty tooltip box
@@ -109,7 +131,7 @@ teleport-effects:
   #
   # model-engine plays a declared Model Engine animation on an invisible marker
   # entity at the player's feet. particles draws a vanilla particle shape — no
-  # dependency. none disables effects and leaves the EssentialsX warmup alone.
+  # dependency. none disables effects and leaves the backend's warmup alone.
   mode: particles
 
   # Used when mode is model-engine but Model Engine is not installed or failed
@@ -121,17 +143,22 @@ teleport-effects:
   # animation's length, and the API exposes no duration getter anywhere. The
   # only runtime signal is hasFinishedAllAnimations(), which can only be polled
   # after the fact. So the duration a server owner puts here is what the plugin
-  # uses to stretch the EssentialsX teleport warmup, guaranteeing the animation
-  # is seen in full before the player is moved.
+  # uses to time the effect, and with EssentialsX to stretch the teleport warmup
+  # so the animation is seen in full before the player is moved.
   #
   # TODO (v2): support `duration: auto`, polling hasFinishedAllAnimations() on a
   # short repeating task with a hard timeout ceiling, so a mistyped duration
   # cannot strand a player in a warmup forever.
   # ---------------------------------------------------------------------------
 
-  # Plays where the player is standing, before the teleport. Its duration also
-  # becomes the EssentialsX warmup for home teleports, so the effect finishes
-  # before the player leaves. Set duration to 0 to keep the server's own warmup.
+  # Plays where the player is standing, before the teleport.
+  #
+  # With EssentialsX its duration also becomes the teleport warmup, so the effect
+  # always finishes before the player leaves; set duration to 0 to keep the
+  # server's own warmup instead. HuskHomes does not allow its warmup to be
+  # changed — it comes from the player's huskhomes.teleport_warmup.<n>
+  # permission — so there the effect plays alongside whatever warmup HuskHomes
+  # already has, and a warmup shorter than this duration cuts the animation off.
   entry:
     # Model Engine model id and animation id, used only when mode is model-engine.
     model: "polaroid_warp"
@@ -144,8 +171,8 @@ teleport-effects:
     # Radius in blocks of the particle ring drawn around the player.
     particle-radius: 1.0
 
-  # Played at the destination, right after the player arrives. EssentialsX has
-  # no post-teleport event, so the plugin fires this itself on the tick after
+  # Played at the destination, right after the player arrives. Neither backend
+  # has a post-teleport event, so the plugin fires this itself on the tick after
   # the move completes.
   arrival:
     model: "polaroid_warp"

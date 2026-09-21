@@ -2,7 +2,7 @@ package me.juancayc.polaroidhomes.menu;
 
 import me.juancayc.polaroidhomes.config.MenuConfig;
 import me.juancayc.polaroidhomes.config.PluginConfig;
-import me.juancayc.polaroidhomes.essentials.EssentialsBridge;
+import me.juancayc.polaroidhomes.provider.HomeProvider;
 import me.juancayc.polaroidhomes.icon.IconStorage;
 import me.juancayc.polaroidhomes.item.ItemManager;
 import me.juancayc.polaroidhomes.text.MessageService;
@@ -23,7 +23,7 @@ public record MenuContext(Plugin plugin,
                           ItemManager itemManager,
                           MenuItems items,
                           MenuRegistry registry,
-                          EssentialsBridge essentials,
+                          HomeProvider provider,
                           IconStorage icons) {
 
     /**
