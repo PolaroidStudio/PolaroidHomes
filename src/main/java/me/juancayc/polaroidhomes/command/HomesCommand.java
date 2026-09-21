@@ -51,27 +51,6 @@ public final class HomesCommand implements BasicCommand {
             return;
         }
 
-        if (args.length > 0 && args[0].equalsIgnoreCase("debug")) {
-            if (!sender.hasPermission("polaroidhomes.admin")) {
-                messages.send(sender, "general.no_permission");
-                return;
-            }
-            if (!(sender instanceof Player self)) {
-                messages.send(sender, "general.players_only");
-                return;
-            }
-            // Temporary: asks the live provider what it reads back, because an empty grid cannot
-            // be told apart from a backend that holds nothing by reading this code.
-            var prov = plugin.provider();
-            sender.sendMessage("[PH] provider: " + prov.pluginName() + " (" + prov.id() + ")");
-            prov.diagnose(self).thenAccept(lines -> {
-                for (String line : lines) {
-                    sender.sendMessage("[PH] " + line);
-                }
-            });
-            return;
-        }
-
         if (args.length > 0 && args[0].equalsIgnoreCase("help")) {
             sendHelp(sender);
             return;
@@ -145,9 +124,6 @@ public final class HomesCommand implements BasicCommand {
         if (sender.hasPermission("polaroidhomes.admin")) {
             if ("reload".startsWith(prefix)) {
                 suggestions.add("reload");
-            }
-            if ("debug".startsWith(prefix)) {
-                suggestions.add("debug");
             }
             for (Player online : Bukkit.getOnlinePlayers()) {
                 if (online.getName().toLowerCase(Locale.ROOT).startsWith(prefix)) {

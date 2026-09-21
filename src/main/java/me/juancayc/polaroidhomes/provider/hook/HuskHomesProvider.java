@@ -185,41 +185,4 @@ public final class HuskHomesProvider implements HomeProvider {
         }));
         return true;
     }
-
-    /**
-     * Reports the raw API answer as well as the mapped one.
-     *
-     * <p>Split deliberately: if the raw list has entries and the mapped one does not, the fault is
-     * in this class; if both are empty, HuskHomes itself answered with nothing for this user and
-     * the question to ask is which user it thinks we mean.
-     */
-    @Override
-    public CompletableFuture<List<String>> diagnose(Player player) {
-        HuskHomesAPI api = api();
-        if (api == null) {
-            return CompletableFuture.completedFuture(List.of("api: <not registered>"));
-        }
-        OnlineUser user = api.adaptUser(player);
-        List<String> lines = new ArrayList<>();
-        lines.add("api: ok");
-        lines.add("user: " + user.getUsername() + " / " + user.getUuid());
-        lines.add("bukkit uuid: " + player.getUniqueId());
-        lines.add("maxHomeSlots: " + api.getMaxHomeSlots(user));
-        lines.add("freeHomeSlots: " + api.getFreeHomeSlots(user));
-        return api.getUserHomes(user)
-                .thenApply(homes -> {
-                    lines.add("getUserHomes size: " + homes.size());
-                    for (Home home : homes) {
-                        lines.add("  - name=" + home.getName()
-                                + " meta=" + (home.getMeta() == null
-                                        ? "<null>" : home.getMeta().getName())
-                                + " owner=" + home.getOwner().getUuid());
-                    }
-                    return lines;
-                })
-                .exceptionally(ex -> {
-                    lines.add("getUserHomes FAILED: " + ex);
-                    return lines;
-                });
-    }
 }
