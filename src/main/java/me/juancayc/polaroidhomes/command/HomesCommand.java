@@ -51,6 +51,26 @@ public final class HomesCommand implements BasicCommand {
             return;
         }
 
+        if (args.length > 0 && args[0].equalsIgnoreCase("debug")) {
+            if (!sender.hasPermission("polaroidhomes.admin")) {
+                messages.send(sender, "general.no_permission");
+                return;
+            }
+            // Temporary diagnostic: prints exactly what the bridge reads back from EssentialsX,
+            // so a menu that renders no homes can be told apart from a bridge that reads none.
+            if (!(sender instanceof Player self)) {
+                messages.send(sender, "general.players_only");
+                return;
+            }
+            var bridge = plugin.essentials();
+            java.util.List<String> read = bridge.homes(self);
+            sender.sendMessage("[PolaroidHomes] essentials available: " + bridge.isAvailable());
+            sender.sendMessage("[PolaroidHomes] getHomes() -> size=" + read.size() + " " + read);
+            sender.sendMessage("[PolaroidHomes] homeLimit() -> " + bridge.homeLimit(self));
+            sender.sendMessage("[PolaroidHomes] tiers() -> " + bridge.tiers());
+            return;
+        }
+
         if (args.length > 0 && args[0].equalsIgnoreCase("help")) {
             sendHelp(sender);
             return;
@@ -123,6 +143,9 @@ public final class HomesCommand implements BasicCommand {
         if (sender.hasPermission("polaroidhomes.admin")) {
             if ("reload".startsWith(prefix)) {
                 suggestions.add("reload");
+            }
+            if ("debug".startsWith(prefix)) {
+                suggestions.add("debug");
             }
             for (Player online : Bukkit.getOnlinePlayers()) {
                 if (online.getName().toLowerCase(Locale.ROOT).startsWith(prefix)) {
