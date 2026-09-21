@@ -67,4 +67,19 @@ public interface HomeProvider {
      *         player rather than leaving them staring at a closed menu
      */
     boolean teleport(Player player, String home);
+
+    /**
+     * A human-readable dump of what this provider reads back, for {@code /homemenu debug}.
+     *
+     * <p>Temporary and deliberately not part of the menu path: an empty grid can mean the backend
+     * holds nothing, or that this hook asked it the wrong question, and only the backend can say
+     * which. Reading the code has twice failed to tell those apart.
+     */
+    default java.util.concurrent.CompletableFuture<java.util.List<String>> diagnose(
+            org.bukkit.entity.Player player) {
+        return snapshot(player, player).thenApply(snapshot -> java.util.List.of(
+                "available: " + isAvailable(),
+                "homes: " + snapshot.homes(),
+                "limit: " + snapshot.limit()));
+    }
 }
