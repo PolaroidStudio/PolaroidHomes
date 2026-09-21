@@ -38,6 +38,11 @@
 #   info           the counter: homes used, your limit, the page number.
 #                  It is a label and does nothing when clicked.
 #   close          closes the window.
+#   effects        opens the effect catalog. Its lore names whatever the player
+#                  currently has equipped, or None. Owner-only: it is drawn in
+#                  an admin's view of somebody else's menu but refuses the
+#                  click, because an admin looking at a player's homes should
+#                  not be one misclick from restyling their teleports.
 #   filler         background. Does nothing when clicked, and its tooltip is
 #                  hidden, because an empty tooltip box looks broken.
 #
@@ -47,6 +52,22 @@
 #   icon-reset     puts the home back on the default icon.
 #   icon-back      returns to the homes grid.
 #   filler         as above.
+#
+# Effect picker (the `effects` section):
+#   effect-animations  opens the animation list. Its lore counts how many of
+#                      that category the player has unlocked, out of the total.
+#   effect-particles   opens the particle list, same shape.
+#   effect-none        unequips, back to a clean teleport. Drawn as already
+#                      current, with no click, when nothing is equipped.
+#   effect-back        returns to the homes grid.
+#   filler             as above.
+#
+# Effect list (the `effect-list` section, used for BOTH categories):
+#   effect-slot        where one category's entries go, the list's home-slot.
+#   previous-page  / next-page  as above.
+#   effect-none        as above.
+#   effect-back        returns to the effect picker, not to the homes grid.
+#   filler             as above.
 #
 # --- What each element can declare -----------------------------------------
 #
@@ -70,7 +91,8 @@
 #
 # Placeholders available in a name or lore: %home%, %world%, %x%, %y%, %z% on
 # a home slot; %used%, %limit%, %page%, %pages% on info; %group% on a locked
-# slot.
+# slot; %effect% on the effects button and on an effect slot; %unlocked% and
+# %total% on a category button.
 #
 # --- If you break it -------------------------------------------------------
 #
@@ -95,7 +117,7 @@
 # Schema version of this file. The plugin migrates older files forward on
 # enable, preserving every value you edited, and backs the original up first.
 # Do not edit this by hand.
-config-version: 1
+config-version: 2
 
 # Hard ceiling on how many home slots are drawn across all pages, and the
 # reason a misconfigured home limit cannot break the menu. A server that
@@ -116,7 +138,7 @@ homes:
     - "HHHHHHHHH"
     - "HHHHHHHHH"
     - "HHHHHHHHH"
-    - "<###I###>"
+    - "<##EI###>"
   elements:
     'H':
       type: home-slot
@@ -147,6 +169,14 @@ homes:
         - "<#E9FDFB>Page <#b6c1ec>%page%<#E9FDFB> of <#b6c1ec>%pages%"
         - ""
         - "<#315a7a>Your limit comes from your home plugin."
+    'E':
+      type: effects
+      item: NETHER_STAR
+      name: "<#cd80f7>ᴛᴇʟᴇᴘᴏʀᴛ ᴇғғᴇᴄᴛ"
+      lore:
+        - "<#E9FDFB>Equipped: <#b6c1ec>%effect%"
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ᴄʜᴏᴏsᴇ"
     # A close button is not on the default grid, so that this release draws the
     # same window earlier ones did. To add one, put a character in a row and
     # declare it here, for example:
@@ -204,3 +234,80 @@ icons:
       lore:
         - ""
         - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ɢᴏ ʙᴀᴄᴋ"
+
+# --- The effect picker -------------------------------------------------------
+#
+# Two buttons, one per category. Three rows rather than six on purpose: the
+# window holds four things, and a six-row window of filler around them reads as
+# a screen that failed to load.
+effects:
+  rows:
+    - "#########"
+    - "###A#P###"
+    - "###N#B###"
+  elements:
+    '#':
+      type: filler
+      item: BLACK_STAINED_GLASS_PANE
+    'A':
+      type: effect-animations
+      item: BLAZE_POWDER
+      name: "<#cd80f7>ᴀɴɪᴍᴀᴛɪᴏɴs"
+      lore:
+        - "<#E9FDFB>Unlocked <#b6c1ec>%unlocked%<#E9FDFB> of <#b6c1ec>%total%"
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ʙʀᴏwsᴇ"
+    'P':
+      type: effect-particles
+      item: FIREWORK_STAR
+      name: "<#22e8bc>ᴘᴀʀᴛɪᴄʟᴇs"
+      lore:
+        - "<#E9FDFB>Unlocked <#b6c1ec>%unlocked%<#E9FDFB> of <#b6c1ec>%total%"
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ʙʀᴏwsᴇ"
+    'N':
+      type: effect-none
+      item: BARRIER
+    'B':
+      type: effect-back
+      item: ARROW
+
+# --- One category's list -----------------------------------------------------
+#
+# Used for BOTH categories. Two layouts would be two things to keep in step for
+# no gain, and a menu that changes shape halfway through reads as a bug.
+effect-list:
+  rows:
+    - "EEEEEEEEE"
+    - "EEEEEEEEE"
+    - "EEEEEEEEE"
+    - "EEEEEEEEE"
+    - "<##N#B##>"
+  elements:
+    'E':
+      type: effect-slot
+      # No item: each slot shows the icon its own catalog entry declares, or the
+      # locked-slot-icon from config.yml when the player has not unlocked it.
+    '#':
+      type: filler
+      item: BLACK_STAINED_GLASS_PANE
+    '<':
+      type: previous-page
+      item: ARROW
+      name: "<#f2c42f>ᴘʀᴇᴠɪᴏᴜs ᴘᴀɢᴇ"
+      lore:
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ɢᴏ ʙᴀᴄᴋ"
+    '>':
+      type: next-page
+      item: ARROW
+      name: "<#f2c42f>ɴᴇxᴛ ᴘᴀɢᴇ"
+      lore:
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ɢᴏ ꜰᴏʀwᴀʀᴅ"
+    'N':
+      type: effect-none
+      item: BARRIER
+    'B':
+      type: effect-back
+      item: ARROW

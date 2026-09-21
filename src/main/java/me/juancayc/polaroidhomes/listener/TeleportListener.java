@@ -1,23 +1,19 @@
 package me.juancayc.polaroidhomes.listener;
 
-import me.juancayc.polaroidhomes.config.EffectSettings;
 import me.juancayc.polaroidhomes.config.PluginConfig;
-import me.juancayc.polaroidhomes.config.TeleportEffects;
 import me.juancayc.polaroidhomes.effect.ArrivalWatcher;
-import me.juancayc.polaroidhomes.effect.TeleportEffect;
+import me.juancayc.polaroidhomes.effect.EffectPlayer;
+import me.juancayc.polaroidhomes.effect.catalog.EffectEntry;
 import me.juancayc.polaroidhomes.teleport.PendingTpaRequests;
 import net.ess3.api.events.TPARequestEvent;
 import net.ess3.api.events.UserTeleportHomeEvent;
 import net.ess3.api.events.teleport.PreTeleportEvent;
 import net.ess3.api.events.teleport.TeleportWarmupEvent;
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.Plugin;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -34,9 +30,20 @@ import java.util.UUID;
  * post-teleport event anywhere in that API, so the arrival effect is fired here, on the tick after
  * PreTeleport, rather than waited for.
  *
- * <p>Ordering is what makes the entry effect visible: the warmup is stretched to the declared
- * animation duration in TeleportWarmupEvent and the animation starts there, so it has the whole
- * warmup to play before the player is moved.
+ * <p>Ordering is what makes the entry effect visible: the warmup is stretched to the equipped
+ * effect’s declared entry duration in TeleportWarmupEvent and the effect starts there, so it has
+ * the whole warmup to play before the player is moved.
+ *
+ * <h2>The warmup now varies per player</h2>
+ *
+ * <p>It used to be one number for the whole server, because there was one global effect. Effects
+ * are per player now, so the stretch is whatever the traveller’s own equipped animation declares
+ * — and a player with nothing equipped, or wearing a particle effect, gets no stretch at all and
+ * keeps exactly the warmup EssentialsX was configured with. That is not a compromise: a warmup only
+ * exists here to let a departure animation finish, and there is no animation to finish. It does
+ * mean two players on one server can wait different lengths of time for the same command, which is
+ * inherent to selling effects of different lengths, and the warmup is still only ever extended, so
+ * the operator’s own configured delay remains the floor for everyone.
  *
  * <h2>How an accepted tpa is recognised</h2>
  *
@@ -57,7 +64,7 @@ public final class TeleportListener implements Listener {
 
     private final Plugin plugin;
     private final PluginConfig config;
-    private final TeleportEffect effect;
+    private final EffectPlayer effects;
 
     /**
      * Players currently inside a home teleport we are decorating.
@@ -71,19 +78,19 @@ public final class TeleportListener implements Listener {
     private final PendingTpaRequests tpaRequests = new PendingTpaRequests();
 
     /**
-     * Teleports in flight that were claimed as an accepted {@code /tpa}, and so are decorated with
-     * the tpa settings rather than the home ones.
+     * Teleports in flight that were claimed as an accepted {@code /tpa}.
      *
      * <p>Separate from {@link #pending} rather than folded into it because the two are established
      * at different moments, a home before the warmup and a tpa at the warmup, and a single map
-     * would have to encode which kind it held anyway.
+     * would have to encode which kind it held anyway. The value is only a marker now: both kinds
+     * draw the same thing, so there are no per-kind settings left to carry.
      */
-    private final Map<UUID, TeleportEffects> decoratingTpa = new HashMap<>();
+    private final Map<UUID, Boolean> decoratingTpa = new HashMap<>();
 
-    public TeleportListener(Plugin plugin, PluginConfig config, TeleportEffect effect) {
+    public TeleportListener(Plugin plugin, PluginConfig config, EffectPlayer effects) {
         this.plugin = plugin;
         this.config = config;
-        this.effect = effect;
+        this.effects = effects;
     }
 
     /**
@@ -137,12 +144,14 @@ public final class TeleportListener implements Listener {
         if (player == null) {
             return;
         }
-        EffectSettings entry = entryFor(player);
-        if (entry == null) {
+        if (!claim(player)) {
             return;
         }
+        // Resolved from what the player is wearing at this moment. A null entry means a clean
+        // teleport: the warmup is left exactly as EssentialsX set it and nothing is drawn.
+        EffectEntry entry = effects.resolve(player);
 
-        long wanted = effect.warmupTicks(entry);
+        long wanted = effects.warmupTicks(entry);
         if (wanted > 0) {
             // EssentialsX states the delay in seconds; ticks divided back up, rounded so a
             // fractional second is never truncated to a shorter warmup than the animation needs.
@@ -151,27 +160,29 @@ public final class TeleportListener implements Listener {
                 event.setDelay(wantedSeconds);
             }
         }
-        effect.playEntry(player, entry);
+        effects.playEntry(player, entry);
     }
 
     /**
-     * The entry settings for a teleport about to warm up, or null when it is not one of ours.
+     * Whether the teleport about to warm up is one this plugin decorates.
      *
-     * <p>The home mark is checked first and consumes nothing else: a home teleport is decorated as
-     * a home even for a player who also holds an unaccepted tpa request, because the teleport in
+     * <p>The home mark is checked first and consumes nothing else: a home teleport is claimed as a
+     * home even for a player who also holds an unaccepted tpa request, because the teleport in
      * front of us is provably the home one.
+     *
+     * <p>What plays is no longer decided here. Both kinds draw the same thing — whatever the
+     * traveller has equipped — so this only answers whether anything is drawn at all.
      */
-    private @Nullable EffectSettings entryFor(Player player) {
+    private boolean claim(Player player) {
         UUID id = player.getUniqueId();
         if (pending.containsKey(id)) {
-            return config.entry();
+            return config.homeEffectsEnabled();
         }
         if (config.tpaEffectsEnabled() && tpaRequests.claim(id, System.currentTimeMillis())) {
-            TeleportEffects tpa = config.tpaEffects();
-            decoratingTpa.put(id, tpa);
-            return tpa.entry();
+            decoratingTpa.put(id, Boolean.TRUE);
+            return true;
         }
-        return null;
+        return false;
     }
 
     /**
@@ -188,29 +199,33 @@ public final class TeleportListener implements Listener {
             return;
         }
         UUID id = player.getUniqueId();
-        TeleportEffects tpa = decoratingTpa.remove(id);
-        EffectSettings arrival;
-        if (pending.remove(id) != null) {
-            arrival = config.arrival();
-        } else if (tpa != null) {
-            arrival = tpa.arrival();
-        } else {
-            // A teleport with no warmup never reached entryFor, so an accepted tpa can still be
+        boolean wasTpa = decoratingTpa.remove(id) != null;
+        boolean wasHome = pending.remove(id) != null;
+        EffectEntry entry = effects.resolve(player);
+        if (wasHome) {
+            if (!config.homeEffectsEnabled()) {
+                return;
+            }
+        } else if (!wasTpa) {
+            // A teleport with no warmup never reached claim(), so an accepted tpa can still be
             // claimable here. Claiming it now is what decorates a tpa on a server that configured
             // no teleport delay at all.
             if (!config.tpaEffectsEnabled() || !tpaRequests.claim(id, System.currentTimeMillis())) {
                 return;
             }
-            TeleportEffects settings = config.tpaEffects();
             // The entry gets the one tick before the move rather than a full animation, which is
             // all an instant teleport can honestly give it.
-            effect.playEntry(player, settings.entry());
-            arrival = settings.arrival();
+            effects.playEntry(player, entry);
+        }
+        if (entry == null) {
+            // Nothing equipped, or equipped but inert. Watching for the arrival would schedule a
+            // per-tick task for an effect that will draw nothing.
+            return;
         }
         // Watched rather than scheduled for the next tick: a cross-world teleport has often not
         // landed one tick after this event, and the arrival would then be drawn at the origin.
         ArrivalWatcher.await(plugin, player, player.getLocation(),
-                (arrived, destination) -> effect.playArrival(arrived, destination, arrival));
+                (arrived, destination) -> effects.playArrival(arrived, destination, entry));
     }
 
     /** Drops a pending mark so a disconnect mid-warmup does not leak an entry forever. */

@@ -4,6 +4,8 @@ import me.juancayc.polaroidhomes.config.MenuConfig;
 import me.juancayc.polaroidhomes.config.PluginConfig;
 import me.juancayc.polaroidhomes.edit.DeleteConfirmations;
 import me.juancayc.polaroidhomes.edit.RenamePrompts;
+import me.juancayc.polaroidhomes.effect.EffectPlayer;
+import me.juancayc.polaroidhomes.effect.catalog.SqlEffectStorage;
 import me.juancayc.polaroidhomes.provider.HomeProvider;
 import me.juancayc.polaroidhomes.icon.IconStorage;
 import me.juancayc.polaroidhomes.item.ItemManager;
@@ -28,7 +30,9 @@ public record MenuContext(Plugin plugin,
                           HomeProvider provider,
                           IconStorage icons,
                           DeleteConfirmations deletes,
-                          RenamePrompts renames) {
+                          RenamePrompts renames,
+                          SqlEffectStorage effects,
+                          EffectPlayer effectPlayer) {
 
     /**
      * True when an item reference produces something the server can actually render.

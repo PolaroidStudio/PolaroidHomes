@@ -182,6 +182,26 @@ public final class MenuItems {
     }
 
     /**
+     * Adds the enchantment glint to an already-built button.
+     *
+     * <p>A glint override rather than a real enchantment, for the same reason the template path
+     * uses one: a fake enchantment shows up in the tooltip and in anvil behaviour, and the glint is
+     * the only part wanted here.
+     *
+     * <p>Applied after the fact rather than as another {@code button} parameter because it marks a
+     * transient state — which catalog entry a player currently wears — that has nothing to do with
+     * how the button was declared.
+     */
+    public ItemStack glint(ItemStack item) {
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setEnchantmentGlintOverride(true);
+            item.setItemMeta(meta);
+        }
+        return marker.mark(item);
+    }
+
+    /**
      * The filler pane.
      *
      * <p>The tooltip is hidden rather than blanked: an empty tooltip box trailing the cursor reads

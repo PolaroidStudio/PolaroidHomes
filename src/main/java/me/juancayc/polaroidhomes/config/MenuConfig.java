@@ -29,6 +29,8 @@ public final class MenuConfig {
 
     private MenuTemplate homes;
     private MenuTemplate icons;
+    private MenuTemplate effectPicker;
+    private MenuTemplate effectList;
     private int maxDisplayedSlots;
 
     public MenuConfig(Plugin plugin) {
@@ -53,6 +55,15 @@ public final class MenuConfig {
         this.icons = load(config, "icons", 1,
                 MenuElement.ICON_SLOT, DefaultMenuTemplates.ICON_ELEMENTS,
                 DefaultMenuTemplates.icons());
+        // The picker has no content slots at all, so it can never need paging.
+        this.effectPicker = load(config, "effects", 1,
+                MenuElement.EFFECT_ANIMATIONS, DefaultMenuTemplates.EFFECT_PICKER_ELEMENTS,
+                DefaultMenuTemplates.effectPicker());
+        // Validated as "may page", like the icon picker: how many entries a category holds is
+        // whatever the operator declared, and a catalog shorter than one page is not a mistake.
+        this.effectList = load(config, "effect-list", 1,
+                MenuElement.EFFECT_SLOT, DefaultMenuTemplates.EFFECT_LIST_ELEMENTS,
+                DefaultMenuTemplates.effectList());
     }
 
     private MenuTemplate load(YamlConfiguration config,
@@ -100,6 +111,23 @@ public final class MenuConfig {
     /** The icon picker layout. Never null, and never an invalid one. */
     public MenuTemplate icons() {
         return icons;
+    }
+
+    /** The effect category picker layout. Never null, and never an invalid one. */
+    public MenuTemplate effectPicker() {
+        return effectPicker;
+    }
+
+    /**
+     * The layout one category's effect list uses. Never null, and never an invalid one.
+     *
+     * <p>One layout for both categories rather than one each. The two lists differ only in which
+     * entries they draw, so two layouts would be two things to keep in step for no gain, and an
+     * operator who restyled one and not the other would ship a menu that changes shape halfway
+     * through.
+     */
+    public MenuTemplate effectList() {
+        return effectList;
     }
 
     /** Ceiling on home slots drawn across all pages of the homes grid. */

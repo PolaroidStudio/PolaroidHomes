@@ -14,7 +14,7 @@
 # preserving every value you edited, and backs the original up first. Do not edit
 # this by hand: lowering it re-runs migrations, raising it makes the plugin refuse
 # to touch the file.
-config-version: 5
+config-version: 6
 
 # Language file loaded from lang/messages_<language>.yml. Any key missing from
 # that file falls back to the English one shipped inside the jar, so a partial
@@ -167,104 +167,145 @@ gui:
     - TORCH
 
 teleport-effects:
-  # model-engine | particles | none
+  # --- What this section is now -----------------------------------------------
   #
-  # model-engine plays a declared Model Engine animation on an invisible marker
-  # entity at the player's feet. particles draws a vanilla particle shape — no
-  # dependency. none disables effects and leaves the backend's warmup alone.
-  mode: particles
+  # A CATALOG of effects players unlock and equip, not one effect for everybody.
+  #
+  # Each entry below is a product. A player equips exactly ONE of them, from
+  # either category, and that one plays on their teleports. A player who has
+  # equipped nothing gets a completely clean teleport: no model, no particles,
+  # no extra warmup. There is no default effect and no "everyone gets this one"
+  # setting — that is the whole point of the change.
+  #
+  # --- How a player gets one --------------------------------------------------
+  #
+  # By holding the permission node generated from the entry's id:
+  #
+  #     teleport-effects.animations.purple_charge  ->  polaroidhomes.animation.purple_charge
+  #     teleport-effects.particles.portal          ->  polaroidhomes.particle.portal
+  #
+  # You never write those nodes here. They are derived from the id, so they
+  # cannot drift out of step with the catalog. Sell or grant them from whatever
+  # you already use — a shop plugin, a rank, a crate. This plugin has no economy
+  # code and never asks who paid for what; it only asks whether the permission
+  # is held right now.
+  #
+  # An id may contain lowercase letters, numbers, `_` and `-` only, because it
+  # becomes a permission node. Anything else is rejected with a console message.
+  #
+  # Losing the permission does NOT clear what a player equipped. The effect just
+  # stops playing, and it starts again by itself if the rank comes back. Nobody
+  # has to re-equip anything after a renewal.
+  #
+  # --- The two categories -----------------------------------------------------
+  #
+  #   animations   a Model Engine model plus animation. Needs Model Engine.
+  #   particles    vanilla particles. Needs nothing.
+  #
+  # An entry declares BOTH its `entry` (departure) and its `arrival`, because a
+  # teleport effect is authored as a pair: a charge-up that builds and a landing
+  # that resolves. Letting one effect's departure meet another's arrival would
+  # produce a teleport that starts as one thing and lands as another, and it
+  # would be a product you could not describe in a shop with one line.
+  #
+  # If Model Engine is NOT installed, every entry under `animations` is treated
+  # as UNAVAILABLE: hidden from the effect menu, never playable, even for a
+  # player who already holds its permission. It is not "silently plays nothing",
+  # because a player who bought a visible, equippable effect and then sees
+  # nothing cannot tell a missing dependency from a bug — and would open a
+  # ticket about it. The plugin says so loudly in the console at startup so the
+  # shortfall is yours to notice, not theirs.
+  #
+  # --- Where effects apply ----------------------------------------------------
 
-  # Used when mode is model-engine but Model Engine is not installed or failed
-  # to load. Accepts particles or none.
-  fallback: particles
+  # Decorate home teleports.
+  homes: true
 
-  # --- Why duration is declared here and not detected ------------------------
+  # Decorate an accepted /tpa. Only the player who travels is decorated, so a
+  # /tpahere is never decorated at all: that direction moves the other player,
+  # and the effect follows whoever is actually moving.
+  tpa: false
+
+  # --- Warmup ------------------------------------------------------------------
+  #
+  # With EssentialsX, the teleport warmup is stretched to the equipped entry's
+  # declared duration so the departure always finishes before the player moves.
+  # That now VARIES PER PLAYER: a player wearing a 3-second animation waits
+  # three seconds, a player wearing a particle effect gets no stretch at all
+  # (particles are drawn in one burst — there is nothing to wait for), and a
+  # player wearing nothing keeps exactly the warmup EssentialsX was configured
+  # with. The warmup is only ever EXTENDED, never shortened, so your own
+  # configured delay is still the floor for everyone.
+  #
+  # HuskHomes does not allow its warmup to be changed at all — it comes from the
+  # player's huskhomes.teleport_warmup.<n> permission and there is no setter —
+  # so there the effect simply plays alongside whatever warmup is configured. If
+  # you want animations to finish on HuskHomes, set its warmup to at least the
+  # longest `duration` in your catalog, and keep your animation durations close
+  # together so the shorter ones do not leave players standing around.
+  #
+  # --- Why duration is declared and not detected -------------------------------
+  #
   # Model Engine's AnimationHandler.playAnimation(...) does not return the
   # animation's length, and the API exposes no duration getter anywhere. The
   # only runtime signal is hasFinishedAllAnimations(), which can only be polled
-  # after the fact. So the duration a server owner puts here is what the plugin
-  # uses to time the effect, and with EssentialsX to stretch the teleport warmup
-  # so the animation is seen in full before the player is moved.
-  #
-  # TODO (v2): support `duration: auto`, polling hasFinishedAllAnimations() on a
-  # short repeating task with a hard timeout ceiling, so a mistyped duration
-  # cannot strand a player in a warmup forever.
+  # after the fact. So the number you put here is what the plugin uses to time
+  # the effect and to stretch the warmup.
   # ---------------------------------------------------------------------------
 
-  # Plays where the player is standing, before the teleport.
-  #
-  # With EssentialsX its duration also becomes the teleport warmup, so the effect
-  # always finishes before the player leaves; set duration to 0 to keep the
-  # server's own warmup instead. HuskHomes does not allow its warmup to be
-  # changed — it comes from the player's huskhomes.teleport_warmup.<n>
-  # permission — so there the effect plays alongside whatever warmup HuskHomes
-  # already has, and a warmup shorter than this duration cuts the animation off.
-  entry:
-    # Model Engine model id and animation id, used only when mode is model-engine.
-    model: "polaroid_warp"
-    animation: "warp_out"
-    # Seconds. Also the teleport warmup, see the note above.
-    duration: 2.0
-    # Used when the effective mode is particles.
-    particle: PORTAL
-    particle-count: 120
-    # Radius in blocks of the particle ring drawn around the player.
-    particle-radius: 1.0
+  animations:
+    purple_charge:
+      # Shown on the menu button. MiniMessage, so gradients and hex work.
+      display-name: "<#cd80f7>ᴄᴀʀɢᴀ ᴠɪᴏʟᴇᴛᴀ"
+      # The menu button's item. Any reference the item layer understands, so
+      # nexo:, itemsadder:, oraxen:, head: and the rest all work here — see
+      # gui.icon-choices above for the full list.
+      icon: AMETHYST_SHARD
+      entry:
+        model: ac_vfx_teleport_charge_purple
+        animation: teleport_charge_origin
+        # Seconds. Also the teleport warmup on EssentialsX, see above.
+        duration: 3.0
+      arrival:
+        model: ac_vfx_teleport_charge_purple
+        animation: teleport_charge_destination
+        duration: 3.0
 
-  # Played at the destination, right after the player arrives. Neither backend
-  # has a post-teleport event, so the plugin fires this itself on the tick after
-  # the move completes.
-  arrival:
-    model: "polaroid_warp"
-    animation: "warp_in"
-    duration: 1.5
-    particle: END_ROD
-    particle-count: 80
-    particle-radius: 1.0
+  particles:
+    portal:
+      display-name: "<#289bd0>ᴘᴏʀᴛᴀʟ"
+      icon: ENDER_PEARL
+      entry:
+        # A vanilla particle name. Names change between Minecraft releases, and
+        # one this version does not have is rejected with a console message
+        # rather than quietly swapped for another — a product that does not look
+        # like its name is worse than one that is missing.
+        particle: PORTAL
+        # How many particles the helix draws. Must be positive.
+        count: 120
+        # Radius in blocks of the helix drawn around the player.
+        radius: 1.0
+      arrival:
+        particle: END_ROD
+        count: 80
+        radius: 1.0
 
-  # --- Teleport requests -----------------------------------------------------
-  #
-  # /tpa only. A /tpa moves the player who asked, so that player gets the
-  # effect. A /tpahere moves the player who was asked, and is deliberately
-  # never decorated: the effect follows whoever travels, and that direction was
-  # not what this was asked for.
-  #
-  # Only the travelling player is decorated. The one standing still sees
-  # nothing, because nothing is happening to them.
-  #
-  # Neither backend announces "this teleport came from a tpa" at the moment it
-  # happens, so the plugin remembers the request and matches it to the teleport
-  # that follows. A /warp, a /spawn and a /back are therefore never decorated,
-  # and neither is a /tp an admin ran on somebody.
-  #
-  # Warmup: with EssentialsX the teleport warmup is stretched to fit the entry
-  # duration below, exactly as it is for a home. HuskHomes does not allow its
-  # warmup to be changed for any teleport, so there the entry plays alongside
-  # whatever warmup HuskHomes already has.
-  tpa:
-    # Turn the whole thing off here. On by default for a new install; an
-    # existing server upgrading into this release gets false written into its
-    # own config.yml instead, so nothing players already see changes under them.
-    enabled: true
-
-    # --- Inheritance ---------------------------------------------------------
-    # Anything not set below is taken from the home effect above, field by
-    # field. Delete this whole tpa block except for `enabled` and a /tpa looks
-    # exactly like a home teleport. Set only `particle` and only the particle
-    # changes, keeping the home duration, model, animation, count and radius.
-    #
-    # The shipped values below are a deliberate variation, not a copy: a
-    # different particle makes a tpa readable as a tpa from across the room.
-    entry:
-      particle: DRAGON_BREATH
-    arrival:
-      particle: TOTEM_OF_UNDYING
+    flame:
+      display-name: "<#f3842c>ʟʟᴀᴍᴀ"
+      icon: BLAZE_POWDER
+      entry:
+        particle: FLAME
+        count: 100
+        radius: 0.8
+      arrival:
+        particle: LAVA
+        count: 60
+        radius: 0.8
 
   # Safety ceiling, in seconds, for how long a Model Engine marker entity may
   # live before it is removed regardless of the animation state. A marker that
   # outlives its animation is a ghost entity that accumulates until restart.
   max-effect-seconds: 10.0
-
 icons:
   # How often, in seconds, pending icon changes are written to the database.
   # Icons are also flushed on disable, so nothing is lost on a clean shutdown.

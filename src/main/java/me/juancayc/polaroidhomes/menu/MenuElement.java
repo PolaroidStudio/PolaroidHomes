@@ -40,7 +40,31 @@ public enum MenuElement {
     ICON_BACK("icon-back"),
 
     /** Where the icon choices go in the picker, the picker's equivalent of {@link #HOME_SLOT}. */
-    ICON_SLOT("icon-slot");
+    ICON_SLOT("icon-slot"),
+
+    /** Opens the effect catalog. Placed on the homes grid, which is the only screen it belongs on. */
+    EFFECTS("effects"),
+
+    /**
+     * Opens the animation category. Effect picker only.
+     *
+     * <p>A category button rather than a generic "open a list" one, because the two categories are a
+     * fixed pair rather than data: a third category would be a code change, so letting an operator
+     * declare one in menu.yml would promise something the renderer cannot deliver.
+     */
+    EFFECT_ANIMATIONS("effect-animations"),
+
+    /** Opens the particle category. Effect picker only. */
+    EFFECT_PARTICLES("effect-particles"),
+
+    /** Takes off whatever is equipped, back to a clean teleport. Effect picker and its lists. */
+    EFFECT_NONE("effect-none"),
+
+    /** Returns from the effect picker to the homes grid, or from a list to the picker. */
+    EFFECT_BACK("effect-back"),
+
+    /** Where one category's entries go, the effect list's equivalent of {@link #HOME_SLOT}. */
+    EFFECT_SLOT("effect-slot");
 
     private final String key;
 

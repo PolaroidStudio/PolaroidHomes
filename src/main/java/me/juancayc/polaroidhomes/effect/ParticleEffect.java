@@ -6,8 +6,15 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 /**
- * Vanilla particles drawn as a rising helix around the player. No dependency, no entities, nothing
- * to clean up, which is why it is also the fallback when Model Engine is absent.
+ * Vanilla particles drawn as a rising helix around the player. Renders every catalog entry in the
+ * particle category.
+ *
+ * <p>No dependency, no entities, nothing to clean up, which is why a particle entry is always
+ * available: there is no installation an operator can get wrong and no reason to hide one.
+ *
+ * <p>The helix is drawn in one burst rather than animated over time, so a particle entry asks for
+ * no warmup at all. That is why {@code EffectSettings.particle} stores a zero duration rather than
+ * a declared one — there is nothing for a warmup to wait for.
  */
 public final class ParticleEffect implements TeleportEffect {
 
@@ -27,14 +34,6 @@ public final class ParticleEffect implements TeleportEffect {
         draw(destination, settings);
     }
 
-    @Override
-    public long warmupTicks(EffectSettings settings) {
-        // The helix is drawn in one burst rather than animated over time, so it needs no warmup of
-        // its own. Whatever the operator declared still applies: it is what makes the departure
-        // read as a departure instead of an instant vanish.
-        return settings.durationTicks();
-    }
-
     private static void draw(Location origin, EffectSettings settings) {
         World world = origin.getWorld();
         int count = settings.particleCount();
@@ -42,6 +41,11 @@ public final class ParticleEffect implements TeleportEffect {
             return;
         }
         double radius = settings.particleRadius();
+        // A catalog entry always carries a resolved particle; the null check is what keeps a
+        // hand-built settings value from reaching spawnParticle as a null registry key.
+        if (settings.particle() == null) {
+            return;
+        }
         for (int i = 0; i < count; i++) {
             double progress = i / (double) count;
             double angle = progress * TURNS * 2.0D * Math.PI;

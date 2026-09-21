@@ -205,16 +205,17 @@ class ConfigMigratorTest {
 
     @Test
     void theShippedRegistryTargetsTheVersionThisJarShips() {
-        // config.yml is at 5: v2 moved max-displayed-slots into menu.yml and turned gui.rows into the
+        // config.yml is at 6: v2 moved max-displayed-slots into menu.yml and turned gui.rows into the
         // row strings there, v3 added the hooks section that names the home provider, v4 added
-        // commands.intercept and worlds.blacklist, v5 added the teleport-effects.tpa block.
-        // messages_en.yml is at 2, for the rename, delete and blocked-world keys plus the two new
-        // home-button shapes. menu.yml and data.yml never needed restructuring, so they stay at the
-        // baseline.
-        assertEquals(5, ConfigMigrations.config().targetVersion());
-        assertEquals(1, ConfigMigrations.menu().targetVersion());
+        // commands.intercept and worlds.blacklist, v5 added the teleport-effects.tpa block, and v6
+        // replaced the single global effect with the per-player catalog. menu.yml is at 2, for the
+        // effect menus and the button that opens them. messages_en.yml is at 3, for the effect
+        // catalog's keys on top of v2's rename, delete and blocked-world ones. data.yml never needed
+        // restructuring, so it stays at the baseline.
+        assertEquals(6, ConfigMigrations.config().targetVersion());
+        assertEquals(2, ConfigMigrations.menu().targetVersion());
         assertEquals(1, ConfigMigrations.data().targetVersion());
-        assertEquals(2, ConfigMigrations.messages().targetVersion());
+        assertEquals(3, ConfigMigrations.messages().targetVersion());
     }
 
     /**

@@ -1,5 +1,6 @@
 package me.juancayc.polaroidhomes.config;
 
+import me.juancayc.polaroidhomes.effect.catalog.EffectCatalog;
 import me.juancayc.polaroidhomes.intercept.CommandInterceptor;
 import me.juancayc.polaroidhomes.world.WorldBlacklist;
 import org.bukkit.Sound;
@@ -28,10 +29,8 @@ public final class PluginConfig {
     private float clickVolume;
     private float clickPitch;
 
-    private EffectMode mode;
-    private EffectMode fallbackMode;
-    private TeleportEffects homeEffects;
-    private TeleportEffects tpaEffects;
+    private EffectCatalog effectCatalog;
+    private boolean homeEffectsEnabled;
     private boolean tpaEffectsEnabled;
     private double maxEffectSeconds;
 
@@ -65,26 +64,16 @@ public final class PluginConfig {
         this.clickVolume = (float) config.getDouble("gui.click-sound-volume", 0.6D);
         this.clickPitch = (float) config.getDouble("gui.click-sound-pitch", 1.2D);
 
-        // A mode of model-engine is only honoured if Model Engine actually answered the call, which
-        // the effect factory decides. Here the config value is read as written.
-        this.mode = EffectMode.parse(config.getString("teleport-effects.mode"), EffectMode.PARTICLES);
-        EffectMode configuredFallback =
-                EffectMode.parse(config.getString("teleport-effects.fallback"), EffectMode.PARTICLES);
-        // A fallback of model-engine would be circular: it is the thing that just failed.
-        this.fallbackMode = configuredFallback == EffectMode.MODEL_ENGINE
-                ? EffectMode.PARTICLES
-                : configuredFallback;
-
         ConfigurationSection effects = config.getConfigurationSection("teleport-effects");
-        this.homeEffects = TeleportEffects.from(effects);
-        // The tpa block inherits from the home block rather than from the shipped defaults, so an
-        // operator who tuned the home effect and wants the same look for /tpa writes nothing at all.
-        this.tpaEffects = TeleportEffects.from(section(effects, "tpa"), homeEffects);
-        // On for a fresh install, which chose this plugin for its teleport effects. An existing
-        // server gets false written into its file by the v4 -> v5 migration instead, so upgrading
-        // never changes what players already see. Read here rather than checked in the listener so
-        // a reload can turn it on and off without re-registering anything.
-        this.tpaEffectsEnabled = config.getBoolean("teleport-effects.tpa.enabled", true);
+        // The whole catalog, both categories, parsed here so a reload picks up a new product
+        // without a restart. Which of these a given player sees is decided per player by their
+        // permissions, not by any value in this file.
+        this.effectCatalog = EffectCatalog.from(effects);
+        // Which kinds of teleport are decorated at all. These replace the old `mode`/`fallback`
+        // pair and the `tpa.enabled` block: a catalog entry's category already says how it renders,
+        // so the only thing left for the file to say is where effects apply.
+        this.homeEffectsEnabled = config.getBoolean("teleport-effects.homes", true);
+        this.tpaEffectsEnabled = config.getBoolean("teleport-effects.tpa", false);
         this.maxEffectSeconds = Math.max(1.0D,
                 config.getDouble("teleport-effects.max-effect-seconds", 10.0D));
 
@@ -100,11 +89,6 @@ public final class PluginConfig {
 
         long intervalSeconds = Math.max(5L, config.getLong("icons.save-interval-seconds", 120L));
         this.saveIntervalTicks = intervalSeconds * 20L;
-    }
-
-    private static @Nullable ConfigurationSection section(@Nullable ConfigurationSection parent,
-                                                          String key) {
-        return parent == null ? null : parent.getConfigurationSection(key);
     }
 
     private static @Nullable Sound parseSound(@Nullable String raw) {
@@ -164,25 +148,14 @@ public final class PluginConfig {
         return clickPitch;
     }
 
-    public EffectMode mode() {
-        return mode;
+    /** Every effect an operator has declared, in both categories. Never null. */
+    public EffectCatalog effectCatalog() {
+        return effectCatalog;
     }
 
-    public EffectMode fallbackMode() {
-        return fallbackMode;
-    }
-
-    public EffectSettings entry() {
-        return homeEffects.entry();
-    }
-
-    public EffectSettings arrival() {
-        return homeEffects.arrival();
-    }
-
-    /** Entry and arrival for an accepted {@code /tpa}, resolved against the home settings. */
-    public TeleportEffects tpaEffects() {
-        return tpaEffects;
+    /** Whether a home teleport is decorated with the traveller's equipped effect. */
+    public boolean homeEffectsEnabled() {
+        return homeEffectsEnabled;
     }
 
     /**

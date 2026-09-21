@@ -2,6 +2,7 @@ package me.juancayc.polaroidhomes.menu;
 
 import me.juancayc.polaroidhomes.edit.DeleteConfirmations;
 import me.juancayc.polaroidhomes.edit.RenamePrompts;
+import me.juancayc.polaroidhomes.effect.catalog.EffectEntry;
 import me.juancayc.polaroidhomes.provider.HomeSnapshot;
 import me.juancayc.polaroidhomes.provider.HomeTier;
 import me.juancayc.polaroidhomes.text.MessageService;
@@ -156,6 +157,7 @@ public final class HomesMenu extends MenuHolder {
                         player.closeInventory();
                     });
                 }
+                case EFFECTS -> drawEffectsButton(inventory, slot, definition);
                 // Home slots are drawn by drawHomes, in reading order across pages. The icon
                 // elements belong to the picker and were rejected by validation for this menu.
                 default -> {
@@ -169,6 +171,49 @@ public final class HomesMenu extends MenuHolder {
                 ? "BLACK_STAINED_GLASS_PANE"
                 : definition.item();
         return context.items().filler(reference);
+    }
+
+    /**
+     * Draws the button that opens the effect catalog.
+     *
+     * <p>Owner-only, like every other action but teleport: the equipped effect is a property of the
+     * player being viewed, and an admin who opened somebody else's grid to look at it should not be
+     * one click from changing what that player's teleports look like. The button is still drawn in
+     * that window — hiding it would make the layout differ between the two — and it simply refuses.
+     *
+     * <p>The lore names what is currently equipped, resolved through the same path the teleport
+     * uses, so an effect a player has equipped but no longer holds the permission for reads as
+     * nothing rather than as still active. That is the one place the "stored but inert" rule is
+     * visible to a player, and it is deliberately the honest side of it: the button says what will
+     * actually play.
+     */
+    private void drawEffectsButton(Inventory inventory, int slot,
+                                   MenuTemplate.ElementDefinition definition) {
+        String current = context.messages().raw("status.none", "<#315a7a>None");
+        Player viewer = Bukkit.getPlayer(targetId);
+        if (viewer != null) {
+            EffectEntry active = context.effectPlayer().resolve(viewer);
+            if (active != null) {
+                // The display name is the operator's own config value and may carry colour tags, so
+                // it goes in as written. Escaping it would print an operator's gradient literally.
+                current = active.displayName();
+            }
+        }
+        inventory.setItem(slot, context.items().element(definition, "NETHER_STAR",
+                "menu.homes.effects.name", "menu.homes.effects.lore", Material.NETHER_STAR,
+                "%effect%", current));
+
+        handlers().put(slot, (player, click) -> {
+            if (!ownWindow) {
+                return;
+            }
+            context.playClick(player);
+            if (!player.hasPermission("polaroidhomes.effects")) {
+                context.messages().send(player, "general.no_permission");
+                return;
+            }
+            context.registry().open(player, new EffectPickerMenu(context, this));
+        });
     }
 
     private ItemStack info(MenuTemplate.ElementDefinition definition, int pages) {

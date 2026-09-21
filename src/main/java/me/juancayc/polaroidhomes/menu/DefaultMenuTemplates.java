@@ -23,6 +23,24 @@ public final class DefaultMenuTemplates {
             MenuElement.NEXT_PAGE,
             MenuElement.INFO,
             MenuElement.CLOSE,
+            MenuElement.EFFECTS,
+            MenuElement.FILLER);
+
+    /** Elements the effect category picker renders. */
+    public static final Set<MenuElement> EFFECT_PICKER_ELEMENTS = Set.of(
+            MenuElement.EFFECT_ANIMATIONS,
+            MenuElement.EFFECT_PARTICLES,
+            MenuElement.EFFECT_NONE,
+            MenuElement.EFFECT_BACK,
+            MenuElement.FILLER);
+
+    /** Elements one category's effect list renders. */
+    public static final Set<MenuElement> EFFECT_LIST_ELEMENTS = Set.of(
+            MenuElement.EFFECT_SLOT,
+            MenuElement.PREVIOUS_PAGE,
+            MenuElement.NEXT_PAGE,
+            MenuElement.EFFECT_NONE,
+            MenuElement.EFFECT_BACK,
             MenuElement.FILLER);
 
     /** Elements the icon picker renders. */
@@ -40,7 +58,7 @@ public final class DefaultMenuTemplates {
             "HHHHHHHHH",
             "HHHHHHHHH",
             "HHHHHHHHH",
-            "<###I###>");
+            "<##EI###>");
 
     private static final List<String> ICON_ROWS = List.of(
             "OOOOOOOOO",
@@ -50,15 +68,38 @@ public final class DefaultMenuTemplates {
             "OOOOOOOOO",
             "<##R#B##>");
 
+    /**
+     * The category picker: two buttons, centred, over a row carrying unequip and back.
+     *
+     * <p>Three rows rather than six. The window holds two choices and two chrome buttons, and a
+     * six-row window of filler around them would read as a screen that failed to load its contents.
+     */
+    private static final List<String> EFFECT_PICKER_ROWS = List.of(
+            "#########",
+            "###A#P###",
+            "###N#B###");
+
+    private static final List<String> EFFECT_LIST_ROWS = List.of(
+            "EEEEEEEEE",
+            "EEEEEEEEE",
+            "EEEEEEEEE",
+            "EEEEEEEEE",
+            "<##N#B##>");
+
     private DefaultMenuTemplates() {
     }
 
     /**
      * The shipped homes grid: five rows of homes over a navigation row.
      *
-     * <p>Note the close button is not on the default grid. The sixth row carries paging and the
-     * counter, which is what the previous hardcoded layout drew; a close element exists and an
-     * operator can place it, but adding one to the default would change what existing servers see.
+     * <p>Note the close button is not on the default grid. The sixth row carries paging, the
+     * counter and the effects button; a close element exists and an operator can place it, but
+     * adding one to the default would change what existing servers see.
+     *
+     * <p>The effects button IS on the default, which does change what existing servers see, and
+     * deliberately. It is the only way into the effect catalog, and a feature whose entry point
+     * an operator has to discover in a changelog and add by hand is a feature most servers would
+     * never switch on. Removing it is one character in menu.yml.
      */
     public static MenuTemplate homes() {
         Map<Character, MenuElement> types = new LinkedHashMap<>();
@@ -69,9 +110,45 @@ public final class DefaultMenuTemplates {
         put(types, definitions, '<', MenuElement.PREVIOUS_PAGE, "ARROW");
         put(types, definitions, '>', MenuElement.NEXT_PAGE, "ARROW");
         put(types, definitions, 'I', MenuElement.INFO, "PAPER");
+        put(types, definitions, 'E', MenuElement.EFFECTS, "NETHER_STAR");
 
         return require(MenuTemplate.parse(HOMES_ROWS, definitions, types,
                 1, MenuElement.HOME_SLOT, HOMES_ELEMENTS), "homes");
+    }
+
+    /** The shipped effect category picker: animations and particles, unequip, back. */
+    public static MenuTemplate effectPicker() {
+        Map<Character, MenuElement> types = new LinkedHashMap<>();
+        Map<Character, MenuTemplate.ElementDefinition> definitions = new LinkedHashMap<>();
+
+        put(types, definitions, '#', MenuElement.FILLER, "BLACK_STAINED_GLASS_PANE");
+        put(types, definitions, 'A', MenuElement.EFFECT_ANIMATIONS, "BLAZE_POWDER");
+        put(types, definitions, 'P', MenuElement.EFFECT_PARTICLES, "FIREWORK_STAR");
+        put(types, definitions, 'N', MenuElement.EFFECT_NONE, "BARRIER");
+        put(types, definitions, 'B', MenuElement.EFFECT_BACK, "ARROW");
+
+        // The grid element is the animations button: this window has no content slots, and
+        // MenuTemplate requires the named grid element to appear at least once. Naming a button
+        // that is always present keeps that rule satisfied without inventing a slot type nothing
+        // fills.
+        return require(MenuTemplate.parse(EFFECT_PICKER_ROWS, definitions, types,
+                1, MenuElement.EFFECT_ANIMATIONS, EFFECT_PICKER_ELEMENTS), "effects");
+    }
+
+    /** The shipped effect list: four rows of entries over unequip, back and paging. */
+    public static MenuTemplate effectList() {
+        Map<Character, MenuElement> types = new LinkedHashMap<>();
+        Map<Character, MenuTemplate.ElementDefinition> definitions = new LinkedHashMap<>();
+
+        put(types, definitions, 'E', MenuElement.EFFECT_SLOT, "");
+        put(types, definitions, '#', MenuElement.FILLER, "BLACK_STAINED_GLASS_PANE");
+        put(types, definitions, '<', MenuElement.PREVIOUS_PAGE, "ARROW");
+        put(types, definitions, '>', MenuElement.NEXT_PAGE, "ARROW");
+        put(types, definitions, 'N', MenuElement.EFFECT_NONE, "BARRIER");
+        put(types, definitions, 'B', MenuElement.EFFECT_BACK, "ARROW");
+
+        return require(MenuTemplate.parse(EFFECT_LIST_ROWS, definitions, types,
+                1, MenuElement.EFFECT_SLOT, EFFECT_LIST_ELEMENTS), "effect-list");
     }
 
     /** The shipped icon picker: five rows of choices over reset, back and paging. */

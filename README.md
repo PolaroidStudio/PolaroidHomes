@@ -52,8 +52,13 @@ refused and a lore line telling the player to delete them.
 **`/homes` without registering it.** Both backends already own that label and load first, so it is
 intercepted rather than registered. See [`commands`](#commands-1).
 
-**Teleport effects.** A departure effect plays where the player stands, and an arrival effect plays
-at the destination. Either a Model Engine animation or vanilla particles, or nothing at all.
+**A catalog of purchasable teleport effects.** A departure effect plays where the player stands and
+an arrival effect plays at the destination — but *which* one is per player, not per server. Operators
+declare a catalog of Model Engine animations and vanilla particle effects; each entry generates the
+permission node that unlocks it, which you sell or grant from whatever you already use. A player
+equips exactly one, from either category, through a menu. A player who has equipped nothing gets a
+completely clean teleport. There is no default effect, no economy code here, and no Vault
+dependency: this plugin only reads permissions.
 
 ### What it deliberately does not do
 
@@ -133,8 +138,9 @@ whichever backend they were chosen under.
 | Block home creation in a blacklisted world | yes, cancels `HomeModifyEvent` (CREATE and UPDATE) | yes, cancels `HomeCreateEvent` (create only) |
 | Block a home *relocated* into a blacklisted world | **yes**, EssentialsX reports a move as UPDATE | no — see below |
 | Departure and arrival effects | yes | yes |
+| Effect catalog and per-player equipping | yes | yes |
 | Named ranks on a locked slot | **yes** | no — see below |
-| Warmup stretched to fit the entry animation | **yes** | no — see below |
+| Warmup stretched to fit the equipped animation | **yes** | no — see below |
 | Grid shows slots above the player's own limit | yes | no, there is nothing to attribute them to |
 
 **Named ranks.** EssentialsX enumerates its `sethome-multiple` groups, so a locked slot names the
@@ -144,13 +150,17 @@ print "unlocks at None", which reads as a broken config, the menu uses a shorter
 slot is locked and stops there. It also sizes the grid to the player's own limit instead of to a
 server maximum that does not exist, so a HuskHomes menu has no locked slots at all.
 
-**Warmup.** EssentialsX's `TeleportWarmupEvent` exposes `setDelay`, so the warmup is lengthened to the
-declared `entry.duration` and the departure animation always finishes before the player moves.
-HuskHomes' own `TeleportWarmupEvent` has `getWarmupDuration()` and **no setter** — the value comes from
-the player's `huskhomes.teleport_warmup.<n>` permission — so there is nothing to write. On HuskHomes
-the effect plays alongside whatever warmup is already configured, and a warmup shorter than
-`entry.duration` cuts the animation off. Set HuskHomes' warmup to at least that duration if you want
-the whole animation.
+**Warmup.** EssentialsX's `TeleportWarmupEvent` exposes `setDelay`, so the warmup is lengthened to
+the equipped entry's declared `duration` and the departure animation always finishes before the
+player moves. Because effects are per player, so is that stretch: a particle effect asks for none
+and a player with nothing equipped keeps the warmup EssentialsX was configured with. It is only ever
+extended, never shortened.
+
+HuskHomes' own `TeleportWarmupEvent` has `getWarmupDuration()` and **no setter** — the value comes
+from the player's `huskhomes.teleport_warmup.<n>` permission — so there is nothing to write. On
+HuskHomes the effect plays alongside whatever warmup is already configured, and a shorter warmup cuts
+the animation off. See [`teleport-effects`](#teleport-effects) for what that means once each entry
+declares its own duration.
 
 **Relocating a home into a blocked world.** EssentialsX fires `HomeModifyEvent` with cause `UPDATE`
 when an existing home is moved, so a home relocated *into* a blacklisted world is refused there.
@@ -250,8 +260,9 @@ inside the jar, so a partial translation degrades key by key instead of showing 
 
 ### `menu.yml`
 
-Where both menus are laid out. Each screen is a picture of the window drawn with characters, plus
-one entry saying what each character is:
+Where all four menus are laid out — the homes grid (`homes`), the icon picker (`icons`), the effect
+category picker (`effects`) and one category's effect list (`effect-list`). Each screen is a picture
+of the window drawn with characters, plus one entry saying what each character is:
 
 ```yaml
 homes:
@@ -269,9 +280,21 @@ homes:
 
 One to six rows, every row exactly nine characters. A space is an empty slot and needs no
 declaration. `home-slot` marks where homes go, filled in reading order with homes, then free slots,
-then locked ones. The other types are `previous-page`, `next-page`, `info`, `close` and `filler`
-for the grid, and `icon-slot`, `previous-page`, `next-page`, `icon-reset`, `icon-back` and `filler`
-for the picker. Each element may declare `item` (any reference from the table below), `name`, `lore`,
+then locked ones. The other types are:
+
+| Screen | Element types |
+|---|---|
+| `homes` | `home-slot`, `previous-page`, `next-page`, `info`, `close`, `effects`, `filler` |
+| `icons` | `icon-slot`, `previous-page`, `next-page`, `icon-reset`, `icon-back`, `filler` |
+| `effects` | `effect-animations`, `effect-particles`, `effect-none`, `effect-back`, `filler` |
+| `effect-list` | `effect-slot`, `previous-page`, `next-page`, `effect-none`, `effect-back`, `filler` |
+
+`effect-list` is used for **both** categories. Two layouts would be two things to keep in step for
+no gain, and a menu that changes shape halfway through reads as a bug. An element one screen
+understands is rejected on another, so a category button placed on the homes grid is a startup error
+rather than a slot that draws an item and does nothing.
+
+Each element may declare `item` (any reference from the table below), `name`, `lore`,
 `custom-model-data` and `glow`; leaving `name` and `lore` out keeps the text from the language file,
 so translations keep working.
 
@@ -321,21 +344,96 @@ picker. It is never an error.
 
 ### `teleport-effects`
 
+A **catalog** of effects players unlock and equip, not one effect for everybody. Each entry is a
+product. A player equips exactly one of them, from either category, and that one plays on their
+teleports. A player who has equipped nothing gets a completely clean teleport: no model, no
+particles, no extra warmup. **There is no default effect.**
+
 | Key | Meaning |
 |---|---|
-| `mode` | `model-engine`, `particles` or `none`. |
-| `fallback` | Used when `mode` is `model-engine` but Model Engine is absent. Accepts `particles` or `none`. |
-| `entry` | The departure effect, played where the player stands. |
-| `arrival` | The arrival effect, played at the destination. |
+| `homes` | Decorate home teleports. |
+| `tpa` | Decorate an accepted `/tpa`. Only the travelling player is decorated, so a `/tpahere` never is. |
+| `animations` | Catalog entries rendered by Model Engine. |
+| `particles` | Catalog entries rendered with vanilla particles. |
 | `max-effect-seconds` | Hard ceiling on how long a Model Engine marker entity may live. |
 
-Each of `entry` and `arrival` takes:
+Each catalog entry takes:
 
 | Key | Meaning |
 |---|---|
-| `model`, `animation` | Model Engine ids, used only in `model-engine` mode. |
-| `duration` | Seconds. See below. |
-| `particle`, `particle-count`, `particle-radius` | Used in `particles` mode. |
+| `display-name` | MiniMessage name on the menu button. Required. |
+| `icon` | Item reference for the menu button, resolved through the same item layer as `icon-choices`. Required. |
+| `entry` | The departure half. Required. |
+| `arrival` | The arrival half. Required. |
+
+An `animations` half takes `model`, `animation` and `duration`. A `particles` half takes `particle`,
+`count` and `radius`.
+
+Both halves are required, and both belong to one entry, because a teleport effect is authored as a
+pair: a charge-up that builds and a landing that resolves. Letting one effect's departure meet
+another's arrival would produce a teleport that starts as one thing and lands as another, and it
+would be a product you could not describe in a shop with one line.
+
+#### Permissions are generated, never written
+
+A player unlocks an entry by holding the node derived from its id:
+
+```
+teleport-effects.animations.purple_charge  ->  polaroidhomes.animation.purple_charge
+teleport-effects.particles.portal          ->  polaroidhomes.particle.portal
+```
+
+You never write those nodes in `config.yml`, so they cannot drift out of step with the catalog.
+Sell or grant them from whatever you already use — a shop plugin, a rank, a crate. **This plugin has
+no economy code**, declares no Vault dependency, and never asks who paid for what. It only asks
+whether the permission is held right now.
+
+An id may contain lowercase letters, numbers, `_` and `-` only, because it becomes a permission
+node. Anything else is rejected with a console message naming the entry.
+
+Losing the permission does **not** clear what a player equipped. The effect simply stops playing,
+and it starts again by itself if the rank comes back — nobody has to re-equip after a renewal. The
+alternative, deleting the row the moment a rank lapses, turns every renewal into a support ticket.
+
+#### A malformed entry costs one effect, not the feature
+
+Every field above is validated, and an entry that fails is dropped with a console line naming the
+entry and the field. The rest of the catalog still loads. Nothing is ever quietly substituted: an
+entry naming a particle this Minecraft version does not have is rejected rather than swapped for a
+different particle, because a product that does not look like its name is worse than one that is
+missing.
+
+#### Animations without Model Engine are hidden, not silent
+
+If Model Engine is not installed, every entry under `animations` is treated as **unavailable**:
+hidden from the effect menu, never playable, even for a player who already holds its permission.
+
+The alternative — leaving it visible and having it play nothing — is worse in the one way that
+matters for a catalog you sell. A player who bought a visible, equippable effect and then sees
+nothing on every teleport cannot tell a missing dependency from a bug, and opens a ticket about it.
+Hiding it makes the shortfall yours to notice, which is why the plugin also says so loudly in the
+console at every startup.
+
+#### Warmup varies per player now
+
+With EssentialsX, the teleport warmup is stretched to the equipped entry's declared `duration` so
+the departure always finishes before the player moves. That now varies by player:
+
+- a player wearing a 3-second animation waits three seconds;
+- a player wearing a particle effect gets **no stretch at all** — particles are drawn in one burst,
+  so there is nothing to wait for, and a particle entry has no duration field;
+- a player wearing nothing keeps exactly the warmup EssentialsX was configured with.
+
+The warmup is only ever **extended**, never shortened, so your own configured delay is still the
+floor for everyone. Two players on one server waiting different lengths of time for the same command
+is inherent to selling effects of different lengths.
+
+HuskHomes does not allow its warmup to be changed at all — see the support matrix — so there the
+effect simply plays alongside whatever warmup is configured. Per-player effects make that gap harder
+to close rather than easier: there is no longer one duration to set HuskHomes' warmup against, so if
+you want every animation to finish you have to set it to the longest one in your catalog, and every
+shorter effect then leaves the player standing still after it has ended. Keeping your animation
+durations close together is the practical answer.
 
 #### Why `duration` is declared and not detected
 
@@ -344,13 +442,36 @@ and the API exposes no duration getter anywhere. The only runtime signal is
 `hasFinishedAllAnimations()`, which can only be polled after the animation is already running.
 
 The plugin needs the length *before* it starts, because on EssentialsX it uses it to extend the
-teleport warmup so the departure animation finishes before the player is moved. Declaring the value is
-the only way to know it in time. The warmup is only ever extended, never shortened: a server that
-configured a longer teleport delay did so deliberately. On HuskHomes the warmup cannot be changed at
-all — see the support matrix — so the duration only times the effect there.
+teleport warmup. Declaring the value is the only way to know it in time.
 
 A `duration: auto` mode — polling `hasFinishedAllAnimations()` with a hard timeout ceiling — is
 noted in the source as a possible future addition.
+
+#### The effect menu
+
+A button on the homes grid opens a **category picker** with one button per category. Clicking a
+category opens that category's list, paged, with an explicit unequip button and a way back to the
+picker.
+
+A picker rather than one window holding both sections, because the catalogs are a price list you
+grow over time and nothing here can bound their size. A combined window would either have to page
+both sections together — putting one category's entries on a screen whose other half belongs to the
+other — or reserve fixed rows for each, wasting half the window when one category is empty and
+truncating the other when it is not.
+
+In a list, an entry takes one of three shapes:
+
+- **equipped** — glinting; clicking it takes it off;
+- **unlocked** — its own icon and name; clicking it equips it, replacing whatever was on;
+- **locked** — the `locked-slot-icon`, no click, and a lore line saying it is locked.
+
+A locked entry names **no price**. This plugin knows only whether a permission is held; it has no
+idea what the node costs, where it is sold, or whether it is sold at all rather than granted with a
+rank. Edit `menu.effects.entry_locked.lore` in your language file if you want to say where yours are
+sold.
+
+The effects button is owner-only. It is drawn in an admin's view of somebody else's menu — hiding it
+would make the layout differ between the two — and it refuses the click.
 
 ### `icons`
 
@@ -399,6 +520,40 @@ the jar ships and, when the file is older, migrates it forward:
 A file **newer** than the jar (you downgraded the plugin) is refused: the plugin logs a warning and
 leaves it untouched rather than migrating it backwards and dropping settings it does not know.
 
+### Upgrading to the effect catalog (config.yml v5 → v6)
+
+This is the one upgrade that changes what your players see, so read it before you take it.
+
+**What happens to your config.** Your existing global effect is preserved as a catalog entry. The
+migration reads `teleport-effects.mode`, `entry` and `arrival` *before* deleting them and writes
+them back out under `teleport-effects.animations.legacy_effect` or
+`teleport-effects.particles.legacy_effect`, depending on the mode. Your model id, animation ids,
+duration, particle, count and radius all carry across exactly. A `display-name` and an `icon` are
+added, because no entry can exist without them and you had neither before — change them to taste.
+`max-effect-seconds` is untouched. `teleport-effects.tpa.enabled` becomes the new `teleport-effects.tpa`
+flag with the same value, and `teleport-effects.homes` is written `true`, which is what your server
+was already doing. A server running `mode: none` gets no catalog entry at all: there was nothing
+playing, so there is nothing to preserve. The pre-migration backup is written as always.
+
+**What happens to your players.**
+
+> **Nobody has anything equipped after the upgrade, so effects stop appearing until you grant the
+> permissions.**
+
+That is inherent to the feature, not a migration bug. Effects are now sold per player, and the only
+other option would be to auto-grant `polaroidhomes.animation.legacy_effect` to everyone — which
+would put a free entry in your shop that you did not choose to give away. The plugin says this in
+the console at **every** startup rather than only once, so it is read rather than discovered.
+
+To get back to where you were, grant the generated node (`polaroidhomes.animation.legacy_effect` or
+`polaroidhomes.particle.legacy_effect`) to whichever group you want, and have those players equip it
+from the effect menu. To go the other way, delete the entry and nobody ever sees it.
+
+**What happens to menu.yml (v1 → v2).** The effect picker and list sections are added with their
+defaults. The effects button is added to the homes grid **only if your grid is still exactly the
+shipped v1 layout**. If you customised your rows, they are left untouched and you add the character
+yourself — hunting for a filler slot to overwrite would move a button you placed deliberately.
+
 ## Commands
 
 | Command | Permission | What it does |
@@ -419,7 +574,16 @@ Aliases: `/phomes`, `/homesmenu`, `/hmenu`.
 | `polaroidhomes.icon` | everyone | Changing the icon of your own homes. |
 | `polaroidhomes.rename` | everyone | Renaming your own homes from the menu. |
 | `polaroidhomes.delete` | everyone | Deleting your own homes from the menu, with a confirmation click. |
+| `polaroidhomes.effects` | everyone | Opening the effect catalog and equipping from it. |
+| `polaroidhomes.animation.<id>` | **nobody** | Unlocking one animation entry. Generated from its catalog id. |
+| `polaroidhomes.particle.<id>` | **nobody** | Unlocking one particle entry. Generated from its catalog id. |
 | `polaroidhomes.admin` | op | Reloading, and opening another player's menu. |
+
+The `animation.` and `particle.` nodes are the ones you sell. They are **generated from the catalog**
+in `config.yml`, never declared — so they cannot be listed in `paper-plugin.yml` and cannot drift out
+of step with the entries they unlock. None of them is granted by default: an effect nobody has been
+sold is an effect nobody wears. `polaroidhomes.effects` only opens the menu; without any of these,
+that menu shows a catalog with every row locked.
 
 `polaroidhomes.rename` and `polaroidhomes.delete` follow the style `polaroidhomes.icon` set: on by
 default, because they act on the player's own homes and both backends already let them do the same

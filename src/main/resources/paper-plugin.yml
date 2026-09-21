@@ -76,6 +76,13 @@ permissions:
   polaroidhomes.delete:
     description: Delete your own homes from the menu, with a confirmation click.
     default: true
+  polaroidhomes.effects:
+    description: Open the teleport effect catalog and equip an effect from it.
+    default: true
+  # The nodes that unlock individual effects are NOT declared here, and cannot be: they are
+  # generated from the ids in config.yml's teleport-effects catalog, which this file cannot see.
+  # They take the form polaroidhomes.animation.<id> and polaroidhomes.particle.<id>, and none of
+  # them is granted by default — an effect nobody has been sold is an effect nobody wears.
   polaroidhomes.admin:
     description: Reload the configuration and open another player's menu.
     default: op

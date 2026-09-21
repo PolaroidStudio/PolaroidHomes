@@ -1,75 +1,52 @@
 package me.juancayc.polaroidhomes.config;
 
 import org.bukkit.Particle;
-import org.bukkit.configuration.ConfigurationSection;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Locale;
 
 /**
- * One half of the teleport effect: either the departure or the arrival.
+ * One half of a catalog entry's effect: either the departure or the arrival.
  *
  * <p>{@code durationSeconds} is declared by the operator, not measured. Model Engine's
  * {@code AnimationHandler.playAnimation(...)} returns an animation property, not a length, and the
  * API exposes no duration getter at all. The only runtime signal is
  * {@code hasFinishedAllAnimations()}, which can only be polled after the fact. Declaring the value
  * is therefore the only way to know, before starting, how long to hold the player in the warmup.
+ *
+ * <p>There is deliberately no inheritance and no partial form any more. An earlier release let the
+ * {@code tpa} block fill its unset fields from the home block field by field, which made sense when
+ * there were exactly two blocks on the whole server. A catalog entry is a product an operator sells,
+ * and a product assembled from another product's leftovers is one an operator cannot read at a
+ * glance, so every entry declares everything it needs and anything missing is a parse error the
+ * operator is told about.
  */
 public record EffectSettings(String model,
                              String animation,
                              double durationSeconds,
-                             Particle particle,
+                             @Nullable Particle particle,
                              int particleCount,
                              double particleRadius) {
 
-    public static EffectSettings from(ConfigurationSection section,
-                                      Particle defaultParticle,
-                                      double defaultDuration) {
-        if (section == null) {
-            return new EffectSettings("", "", defaultDuration, defaultParticle, 60, 1.0D);
-        }
-        return new EffectSettings(
-                section.getString("model", ""),
-                section.getString("animation", ""),
-                Math.max(0.0D, section.getDouble("duration", defaultDuration)),
-                parseParticle(section.getString("particle"), defaultParticle),
-                Math.max(0, section.getInt("particle-count", 60)),
-                Math.max(0.0D, section.getDouble("particle-radius", 1.0D)));
+    /** Duration clamp floor, so an entry declaring zero still gets one frame of effect. */
+    public static final double MIN_DURATION = 0.0D;
+
+    /** Builds the animation half of a catalog entry. */
+    public static EffectSettings animation(String model, String animation, double durationSeconds) {
+        return new EffectSettings(model, animation, Math.max(MIN_DURATION, durationSeconds),
+                null, 0, 0.0D);
     }
 
     /**
-     * Reads a section, taking every field the section does not set from {@code inherited}.
+     * Builds the particle half of a catalog entry.
      *
-     * <p>The difference from {@link #from} is which values fill the gaps: there it is the shipped
-     * defaults, here it is another block the operator already configured. That is what lets the
-     * {@code tpa} block be written as only the one or two fields that differ from the home effect,
-     * or left out entirely to mean "the same".
-     *
-     * <p>{@code isSet} rather than a sentinel default: a section that explicitly writes
-     * {@code particle-count: 0} means zero, and a getter's default argument cannot tell that apart
-     * from the key being absent.
+     * <p>Particles carry no duration of their own: the helix is drawn in one burst rather than
+     * animated over time. The value is kept at zero so a particle entry contributes no warmup
+     * stretch, which is the honest answer — there is nothing to wait for.
      */
-    public static EffectSettings inheriting(@Nullable ConfigurationSection section,
-                                            EffectSettings inherited) {
-        if (section == null) {
-            return inherited;
-        }
-        return new EffectSettings(
-                section.isSet("model") ? section.getString("model", inherited.model())
-                        : inherited.model(),
-                section.isSet("animation") ? section.getString("animation", inherited.animation())
-                        : inherited.animation(),
-                section.isSet("duration")
-                        ? Math.max(0.0D, section.getDouble("duration", inherited.durationSeconds()))
-                        : inherited.durationSeconds(),
-                parseParticle(section.getString("particle"), inherited.particle()),
-                section.isSet("particle-count")
-                        ? Math.max(0, section.getInt("particle-count", inherited.particleCount()))
-                        : inherited.particleCount(),
-                section.isSet("particle-radius")
-                        ? Math.max(0.0D, section.getDouble("particle-radius",
-                                inherited.particleRadius()))
-                        : inherited.particleRadius());
+    public static EffectSettings particle(Particle particle, int count, double radius) {
+        return new EffectSettings("", "", 0.0D, particle, Math.max(0, count),
+                Math.max(0.0D, radius));
     }
 
     /** Ticks this effect occupies, rounded up so a fractional second is never cut short. */
@@ -81,16 +58,24 @@ public record EffectSettings(String model,
         return !model.isBlank() && !animation.isBlank();
     }
 
-    private static Particle parseParticle(String name, Particle fallback) {
+    /**
+     * Resolves a particle name, or null when it names none.
+     *
+     * <p>Null rather than a silent fallback, because the caller is parsing a catalog entry an
+     * operator will sell: substituting a different particle would ship a product that does not look
+     * like what its name says, and the operator would never find out. The entry is rejected with a
+     * message instead.
+     */
+    public static @Nullable Particle parseParticle(@Nullable String name) {
         if (name == null || name.isBlank()) {
-            return fallback;
+            return null;
         }
         try {
             return Particle.valueOf(name.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException ignored) {
             // Particle names are reshuffled between Minecraft releases, so a config that was valid
-            // last version can name one that no longer exists. Falling back beats refusing to load.
-            return fallback;
+            // last version can name one that no longer exists.
+            return null;
         }
     }
 }

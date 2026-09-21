@@ -1,10 +1,9 @@
 package me.juancayc.polaroidhomes.listener;
 
-import me.juancayc.polaroidhomes.config.EffectSettings;
 import me.juancayc.polaroidhomes.config.PluginConfig;
-import me.juancayc.polaroidhomes.config.TeleportEffects;
 import me.juancayc.polaroidhomes.effect.ArrivalWatcher;
-import me.juancayc.polaroidhomes.effect.TeleportEffect;
+import me.juancayc.polaroidhomes.effect.EffectPlayer;
+import me.juancayc.polaroidhomes.effect.catalog.EffectEntry;
 import me.juancayc.polaroidhomes.teleport.PendingTpaRequests;
 import net.william278.huskhomes.event.ReplyTeleportRequestEvent;
 import net.william278.huskhomes.event.TeleportEvent;
@@ -38,15 +37,20 @@ import java.util.UUID;
  * arrives first.
  *
  * <p><b>The warmup cannot be stretched here.</b> EssentialsX exposes {@code setDelay} on its warmup
- * event, so the EssentialsX path lengthens the countdown to fit a declared animation. HuskHomes'
- * {@code TeleportWarmupEvent} has {@code getWarmupDuration()} and no setter, and its duration comes
- * from the player's own {@code huskhomes.teleport_warmup.<n>} permission, so there is nothing to
- * write. The entry effect therefore plays for its declared duration alongside whatever warmup
- * HuskHomes configured; if that warmup is shorter, the player is moved while the animation is still
- * running. That is a real difference between the two backends, not something worked around here — an
- * operator who wants the full animation sets HuskHomes' own warmup to at least
- * {@code teleport-effects.entry.duration}. The same applies to the tpa effect, which has no warmup
- * lever of its own either.
+ * event, so the EssentialsX path lengthens the countdown to fit the traveller's equipped animation.
+ * HuskHomes' {@code TeleportWarmupEvent} has {@code getWarmupDuration()} and no setter, and its
+ * duration comes from the player's own {@code huskhomes.teleport_warmup.<n>} permission, so there
+ * is nothing to write. The entry effect therefore plays for its declared duration alongside
+ * whatever warmup HuskHomes configured; if that warmup is shorter, the player is moved while the
+ * animation is still running. That is a real difference between the two backends, not something
+ * worked around here.
+ *
+ * <p>Per-player effects make that gap harder for an operator to close, not easier. There is no
+ * longer one duration to set HuskHomes' warmup against: each catalog animation declares its own, so
+ * an operator who wants every effect to finish has to set the warmup to the longest one in the
+ * catalog, and every shorter effect then leaves the player standing still after it has ended.
+ * Keeping the catalog's animation durations close together is the practical answer, and a particle
+ * entry has no duration to miss at all.
  *
  * <h2>How an accepted tpa is recognised</h2>
  *
@@ -66,7 +70,7 @@ public final class HuskHomesTeleportListener implements Listener {
 
     private final Plugin plugin;
     private final PluginConfig config;
-    private final TeleportEffect effect;
+    private final EffectPlayer effects;
 
     /**
      * Players whose entry effect has already been started for the teleport in flight.
@@ -80,18 +84,19 @@ public final class HuskHomesTeleportListener implements Listener {
     private final PendingTpaRequests tpaRequests = new PendingTpaRequests();
 
     /**
-     * Teleports in flight being decorated with the tpa settings rather than the home ones.
+     * Teleports in flight that were claimed as an accepted {@code /tpa}.
      *
      * <p>Held for the same reason {@link #decorating} is: the warmup event and the teleport event
-     * both fire for one teleport, and the second must reuse what the first resolved rather than
-     * try to claim an already-consumed mark.
+     * both fire for one teleport, and the second must know the first already claimed the mark
+     * rather than try to claim an already-consumed one. The value is only a marker now — both
+     * kinds of teleport draw the same thing, so there are no per-kind settings left to carry.
      */
-    private final Map<UUID, TeleportEffects> decoratingTpa = new HashMap<>();
+    private final Map<UUID, Boolean> decoratingTpa = new HashMap<>();
 
-    public HuskHomesTeleportListener(Plugin plugin, PluginConfig config, TeleportEffect effect) {
+    public HuskHomesTeleportListener(Plugin plugin, PluginConfig config, EffectPlayer effects) {
         this.plugin = plugin;
         this.config = config;
-        this.effect = effect;
+        this.effects = effects;
     }
 
     /**
@@ -130,8 +135,8 @@ public final class HuskHomesTeleportListener implements Listener {
         Teleport teleport = event.getTimedTeleport();
         Player player = homeTeleportPlayer(teleport);
         if (player != null) {
-            if (decorating.add(player.getUniqueId())) {
-                effect.playEntry(player, config.entry());
+            if (config.homeEffectsEnabled() && decorating.add(player.getUniqueId())) {
+                effects.playEntry(player, effects.resolve(player));
             }
             return;
         }
@@ -139,13 +144,12 @@ public final class HuskHomesTeleportListener implements Listener {
         if (player == null) {
             return;
         }
-        // Resolved settings are stored before the play guard, not inside it: the mark has already
-        // been consumed by tpaTeleportPlayer, so dropping them here would leave the teleport event
-        // unable to tell this tpa from an undecorated teleport.
-        TeleportEffects tpa = config.tpaEffects();
-        decoratingTpa.put(player.getUniqueId(), tpa);
+        // The mark is recorded before the play guard, not inside it: it has already been consumed
+        // by tpaTeleportPlayer, so dropping it here would leave the teleport event unable to tell
+        // this tpa from an undecorated teleport.
+        decoratingTpa.put(player.getUniqueId(), Boolean.TRUE);
         if (decorating.add(player.getUniqueId())) {
-            effect.playEntry(player, tpa.entry());
+            effects.playEntry(player, effects.resolve(player));
         }
     }
 
@@ -160,41 +164,43 @@ public final class HuskHomesTeleportListener implements Listener {
     public void onTeleport(TeleportEvent event) {
         Teleport teleport = event.getTeleport();
         Player player = homeTeleportPlayer(teleport);
-        EffectSettings entry;
-        EffectSettings arrival;
         if (player != null) {
-            entry = config.entry();
-            arrival = config.arrival();
+            if (!config.homeEffectsEnabled()) {
+                return;
+            }
         } else {
             player = tpaTeleportPlayer(teleport);
             if (player == null) {
                 return;
             }
-            // The warmup may already have resolved these; if it did, reuse them, because the mark
-            // it claimed is gone and claiming again would find nothing.
-            TeleportEffects tpa = decoratingTpa.remove(player.getUniqueId());
-            if (tpa == null) {
-                tpa = config.tpaEffects();
-            }
-            entry = tpa.entry();
-            arrival = tpa.arrival();
+            // The warmup may already have claimed the mark for this same teleport; the remove is
+            // what stops the entry below from being read as a second, unclaimed tpa.
+            decoratingTpa.remove(player.getUniqueId());
         }
         UUID id = player.getUniqueId();
+        // Resolved from what the player is wearing at this moment, once, and reused for both
+        // halves so a departure and an arrival can never come from two different effects.
+        EffectEntry entry = effects.resolve(player);
         if (decorating.add(id)) {
             // No warmup event fired for this one, so the entry effect has not played yet. It gets the
             // one tick before the move rather than a full animation, which is all an instant teleport
             // can honestly give it.
-            effect.playEntry(player, entry);
+            effects.playEntry(player, entry);
         }
         decorating.remove(id);
 
+        if (entry == null) {
+            // Nothing equipped, or equipped but inert. Watching for the arrival would schedule a
+            // per-tick task for an effect that will draw nothing.
+            return;
+        }
         // Watched rather than scheduled for the next tick: HuskHomes carries the move out
         // asynchronously and a cross-world teleport routinely has not landed a tick later, which
         // drew the arrival around a player still standing at the origin — invisibly, on top of the
         // departure effect just drawn there.
         Player travelling = player;
         ArrivalWatcher.await(plugin, travelling, travelling.getLocation(),
-                (arrived, destination) -> effect.playArrival(arrived, destination, arrival));
+                (arrived, destination) -> effects.playArrival(arrived, destination, entry));
     }
 
     /**

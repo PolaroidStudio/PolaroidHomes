@@ -5,9 +5,10 @@ import me.juancayc.polaroidhomes.command.HomesCommand;
 import me.juancayc.polaroidhomes.config.MenuConfig;
 import me.juancayc.polaroidhomes.config.PluginConfig;
 import me.juancayc.polaroidhomes.config.migration.ConfigMigrations;
+import me.juancayc.polaroidhomes.effect.EffectPlayer;
 import me.juancayc.polaroidhomes.effect.ModelEngineEffect;
-import me.juancayc.polaroidhomes.effect.TeleportEffect;
-import me.juancayc.polaroidhomes.effect.TeleportEffectFactory;
+import me.juancayc.polaroidhomes.effect.catalog.EffectCategory;
+import me.juancayc.polaroidhomes.effect.catalog.SqlEffectStorage;
 import me.juancayc.polaroidhomes.edit.DeleteConfirmations;
 import me.juancayc.polaroidhomes.edit.RenamePrompts;
 import me.juancayc.polaroidhomes.icon.IconStorage;
@@ -64,12 +65,13 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
     private String selectedProviderRequest;
     private DatabaseManager database;
     private SqlIconStorage icons;
+    private SqlEffectStorage effectStorage;
     private IconCacheListener iconCache;
     private ItemManager items;
     private MenuRegistry registry;
     private MenuItemMarker marker;
     private MenuContext menuContext;
-    private TeleportEffect effect;
+    private EffectPlayer effects;
     /**
      * The provider-specific teleport listener, kept only so a reload can unregister it.
      *
@@ -126,8 +128,10 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
         this.registry = new MenuRegistry(this);
         this.marker = new MenuItemMarker(this);
 
+        // Built before the context, because the menus read the catalog through it.
+        this.effects = new EffectPlayer(this, config, effectStorage, ModelEngineEffect.isAvailable());
         rebuildContext();
-        this.effect = TeleportEffectFactory.create(this, config);
+        reportCatalog();
 
         registerListeners();
         registerCommand();
@@ -147,12 +151,20 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
         }
         deletes.clearAll();
         renames.clearAll();
-        if (effect != null) {
+        if (effects != null) {
             // Last chance to take spawned markers with us. Skipping it is how ghost entities
             // accumulate across reloads.
-            effect.shutdown();
+            effects.shutdown();
         }
         clearTeleportListener();
+        if (effectStorage != null) {
+            try {
+                effectStorage.close();
+            } catch (StorageException ex) {
+                getLogger().log(Level.SEVERE,
+                        "Could not write pending equipped-effect changes on shutdown.", ex);
+            }
+        }
         if (icons != null) {
             try {
                 icons.close();
@@ -223,6 +235,9 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
         try {
             this.database = new DatabaseManager(settings, getDataFolder());
             this.icons = new SqlIconStorage(database);
+            // Same pool, same lifecycle: the equipped effect is per-player state exactly as an icon
+            // is, so it lives in the store that already exists rather than in a file beside it.
+            this.effectStorage = new SqlEffectStorage(database);
             // RuntimeException covers StorageException and Hikari's own pool-initialisation
             // failure alike; both mean the same thing here, and neither is recoverable.
         } catch (RuntimeException ex) {
@@ -243,7 +258,7 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
     private void rebuildContext() {
         MenuItems menuItems = new MenuItems(items, messages, marker, getLogger());
         this.menuContext = new MenuContext(this, config, menus, messages, items, menuItems,
-                registry, provider, icons, deletes, renames);
+                registry, provider, icons, deletes, renames, effectStorage, effects);
     }
 
     private void registerListeners() {
@@ -257,7 +272,7 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
         this.iconLifecycle = iconLifecycleListener();
         getServer().getPluginManager().registerEvents(iconLifecycle, this);
 
-        this.iconCache = new IconCacheListener(this, icons);
+        this.iconCache = new IconCacheListener(this, icons, effectStorage);
         getServer().getPluginManager().registerEvents(iconCache, this);
 
         this.teleportListener = teleportListener();
@@ -273,9 +288,10 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
         // listener that was skipped at enable.
         getServer().getPluginManager().registerEvents(new CommandInterceptListener(this), this);
 
-        if (effect instanceof ModelEngineEffect modelEngine) {
-            // Only registered for the effect that actually spawns entities; the other two have
-            // nothing that could be orphaned.
+        ModelEngineEffect modelEngine = effects.animations();
+        if (modelEngine != null) {
+            // Only registered when the renderer that spawns entities actually exists; particles
+            // leave nothing behind that could be orphaned.
             getServer().getPluginManager().registerEvents(
                     new EffectMarkerSweepListener(modelEngine), this);
         }
@@ -297,8 +313,8 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
 
     private Listener teleportListener() {
         return "huskhomes".equals(provider.id())
-                ? new HuskHomesTeleportListener(this, config, effect)
-                : new TeleportListener(this, config, effect);
+                ? new HuskHomesTeleportListener(this, config, effects)
+                : new TeleportListener(this, config, effects);
     }
 
     /**
@@ -354,6 +370,48 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
     }
 
     /**
+     * Says out loud, at enable and on every reload, what the catalog actually holds.
+     *
+     * <p>Every line here exists because the alternative is an operator discovering it from a
+     * player. A malformed entry is silently absent from a menu; an animation entry on a server with
+     * no Model Engine is silently absent too, and for a completely different reason; and after the
+     * upgrade to per-player effects nobody has anything equipped at all, so a server that had a
+     * working global effect yesterday shows nothing today until permissions are granted. None of
+     * those is a bug, and all three look exactly like one from the outside.
+     */
+    private void reportCatalog() {
+        for (String problem : config.effectCatalog().problems()) {
+            getLogger().warning("config.yml: " + problem);
+        }
+
+        int animations = config.effectCatalog().byCategory(EffectCategory.ANIMATION).size();
+        int particles = config.effectCatalog().byCategory(EffectCategory.PARTICLE).size();
+        if (config.effectCatalog().isEmpty()) {
+            getLogger().info("No teleport effects are declared, so every teleport is clean. Add "
+                    + "entries under teleport-effects.animations or teleport-effects.particles to "
+                    + "build a catalog.");
+            return;
+        }
+        getLogger().info("Teleport effect catalog: " + animations + " animation(s), " + particles
+                + " particle effect(s).");
+
+        if (animations > 0 && !effects.modelEngineAvailable()) {
+            // Hidden, not silently inert. An operator who is selling these needs to know their
+            // players cannot see what they bought.
+            getLogger().warning("Model Engine is not installed, so all " + animations
+                    + " animation effect(s) are UNAVAILABLE: they are hidden from the effect menu "
+                    + "and will not play, even for a player who already owns the permission. "
+                    + "Install Model Engine, or move those effects to the particles category.");
+        }
+
+        getLogger().info("Effects are per player and nobody has one equipped until they choose it "
+                + "from the menu, which requires the permission generated from the effect's id "
+                + "(polaroidhomes.animation.<id> or polaroidhomes.particle.<id>). Until those "
+                + "nodes are granted, every teleport on this server is clean. That is the "
+                + "intended behaviour of this release, not a misconfiguration.");
+    }
+
+    /**
      * Starts the async write-behind flush.
      *
      * <p>Asynchronous because JDBC blocks, and the exception is swallowed on purpose: Bukkit
@@ -368,6 +426,14 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
             } catch (StorageException ex) {
                 getLogger().log(Level.WARNING,
                         "Could not write pending icon changes; retrying on the next save.", ex);
+            }
+            try {
+                // Caught separately so one store failing does not cost the other its flush.
+                effectStorage.flush();
+            } catch (StorageException ex) {
+                getLogger().log(Level.WARNING,
+                        "Could not write pending equipped-effect changes; retrying on the next "
+                                + "save.", ex);
             }
         }, interval, interval);
     }
@@ -395,18 +461,22 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
         warnIfBackendChanged();
         boolean providerChanged = reselectProvider();
 
-        // The old effect is shut down before the new one exists, so its markers are removed while
-        // the object that knows about them is still the live one.
-        if (effect != null) {
-            effect.shutdown();
+        // The old renderers are shut down before the new ones exist, so their markers are removed
+        // while the object that knows about them is still the live one.
+        if (effects != null) {
+            effects.shutdown();
         }
         if (teleportListener != null) {
             HandlerList.unregisterAll(teleportListener);
             clearTeleportListener();
         }
-        this.effect = TeleportEffectFactory.create(this, config);
+        // Model Engine availability is re-asked rather than remembered: an operator who installed
+        // it and ran a reload should get their animation entries without a restart. Equipped rows
+        // are untouched either way, so an entry that became available again simply starts playing.
+        this.effects = new EffectPlayer(this, config, effectStorage, ModelEngineEffect.isAvailable());
         this.teleportListener = teleportListener();
         getServer().getPluginManager().registerEvents(teleportListener, this);
+        reportCatalog();
 
         // The icon-lifecycle listener is per provider too, so a provider swap has to re-hook it or
         // renames and deletes would keep being read from the backend that is no longer in use.

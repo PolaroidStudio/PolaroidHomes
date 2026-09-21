@@ -1,6 +1,6 @@
-version: 2
+version: 3
 # Schema version of this file, migrated forward automatically on enable. Do not edit by hand.
-config-version: 2
+config-version: 3
 # Base language file. Copy to messages_<lang>.yml to translate.
 # Missing keys fall back to this file automatically (setDefaults), so a partial translation
 # never shows a raw key to a player. Keep this file complete.
@@ -69,6 +69,17 @@ icons:
   changed: "<#95d027>Icon for <#f2c42f>%home%<#95d027> updated."
   reset: "<#95d027>Icon for <#f2c42f>%home%<#95d027> reset to the default."
   unavailable: "<#eb4b30>That icon is not available on this server."
+
+# --- Teleport effects -------------------------------------------------------
+# A player equips exactly one effect, from either category, and equipping one
+# replaces whatever they had on. %effect% is the entry's display-name straight
+# out of config.yml, so it arrives already coloured.
+effects:
+  equipped: "<#95d027>Now using <#f2c42f>%effect%<#95d027> on your teleports."
+  unequipped: "<#315a7a>Your teleports are back to normal."
+  # Sent when a permission lapsed between the window being drawn and the click.
+  # Not an accusation: the usual cause is a rank expiring, not a player cheating.
+  locked: "<#eb4b30>You do not have <#f2c42f>%effect%<#eb4b30> unlocked."
 
 command:
   header: "<#315a7a>▬▬▬▬▬▬▬▬▬▬▬▬ <#289bd0>ʜᴏᴍᴇs <#315a7a>▬▬▬▬▬▬▬▬▬▬▬▬"
@@ -171,6 +182,15 @@ menu:
         - "<#E9FDFB>Page <#b6c1ec>%page%<#E9FDFB> of <#b6c1ec>%pages%"
         - ""
         - "<#315a7a>Your limit comes from your home plugin."
+    # The button that opens the effect catalog. %effect% is what will actually
+    # play, so an effect a player equipped but no longer has the permission for
+    # reads as None here rather than as still active.
+    effects:
+      name: "<#cd80f7>ᴛᴇʟᴇᴘᴏʀᴛ ᴇғғᴇᴄᴛ"
+      lore:
+        - "<#E9FDFB>Equipped: <#b6c1ec>%effect%"
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ᴄʜᴏᴏsᴇ"
   icons:
     title: "<dark_gray><b>ɪᴄᴏɴ ғᴏʀ %home%"
     choice:
@@ -188,6 +208,64 @@ menu:
         - "<#E9FDFB>Go back to the default icon."
         - ""
         - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ʀᴇsᴇᴛ"
+    back:
+      name: "<#f2c42f>ʙᴀᴄᴋ"
+      lore:
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ɢᴏ ʙᴀᴄᴋ"
+  # --- The effect catalog ---------------------------------------------------
+  # Two windows: a category picker, and one list used for both categories.
+  effects:
+    title: "<dark_gray><b>ᴛᴇʟᴇᴘᴏʀᴛ ᴇғғᴇᴄᴛs"
+    animations:
+      title: "<dark_gray><b>ᴀɴɪᴍᴀᴛɪᴏɴs"
+      name: "<#cd80f7>ᴀɴɪᴍᴀᴛɪᴏɴs"
+      lore:
+        - "<#E9FDFB>Unlocked <#b6c1ec>%unlocked%<#E9FDFB> of <#b6c1ec>%total%"
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ʙʀᴏᴡsᴇ"
+    particles:
+      title: "<dark_gray><b>ᴘᴀʀᴛɪᴄʟᴇs"
+      name: "<#22e8bc>ᴘᴀʀᴛɪᴄʟᴇs"
+      lore:
+        - "<#E9FDFB>Unlocked <#b6c1ec>%unlocked%<#E9FDFB> of <#b6c1ec>%total%"
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ʙʀᴏᴡsᴇ"
+    # An entry the player has unlocked but is not wearing.
+    entry:
+      name: "%effect%"
+      lore:
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ᴇǫᴜɪᴘ"
+    # The one they are wearing. Also drawn with the enchantment glint.
+    entry_equipped:
+      name: "%effect%"
+      lore:
+        - "<#95d027>This is your current effect."
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ᴜɴᴇǫᴜɪᴘ"
+    # An entry they have not unlocked. No price is named here on purpose: this
+    # plugin knows only whether a permission is held, not what it costs or where
+    # it is sold, and a menu quoting a stale price is worse than one quoting
+    # none. Say where yours are sold if you want that written down.
+    entry_locked:
+      name: "<#9b336e>%effect%"
+      lore:
+        - "<#eb4b30> • ʟᴏᴄᴋᴇᴅ"
+        - ""
+        - "<#315a7a>You have not unlocked this effect."
+    none:
+      name: "<#f2c42f>ɴᴏ ᴇғғᴇᴄᴛ"
+      lore:
+        - "<#E9FDFB>Teleport with nothing at all."
+        - ""
+        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ᴜɴᴇǫᴜɪᴘ"
+    # Drawn instead of `none` when nothing is equipped already, so the button
+    # never offers an action that would do nothing.
+    none_current:
+      name: "<#95d027>ɴᴏ ᴇғғᴇᴄᴛ"
+      lore:
+        - "<#E9FDFB>Your teleports are already clean."
     back:
       name: "<#f2c42f>ʙᴀᴄᴋ"
       lore:
