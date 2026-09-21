@@ -185,4 +185,70 @@ public final class HuskHomesProvider implements HomeProvider {
         }));
         return true;
     }
+
+    /**
+     * True: {@code BaseHuskHomesAPI#renameHome(User, String, String)} exists and was verified
+     * against the 4.11 jar.
+     */
+    @Override
+    public boolean supportsRename() {
+        return true;
+    }
+
+    /** True: {@code BaseHuskHomesAPI#deleteHome(User, String)} exists, verified the same way. */
+    @Override
+    public boolean supportsDelete() {
+        return true;
+    }
+
+    /**
+     * Renames through {@code renameHome(User, String, String)}.
+     *
+     * <p>That method is {@code void} rather than a future, and its bytecode hands the work straight
+     * to {@code HuskHomes#runAsync}: it returns immediately, never blocks and never throws for a
+     * home that does not exist. So the true below means "accepted", not "renamed" — the same
+     * contract {@link #teleport} already has, and the reason nothing here calls {@code join()}.
+     *
+     * <p>The rename fires HuskHomes' own {@code HomeEditEvent}, which is what
+     * {@code HuskHomesIconLifecycleListener} is hooked to, so the icon follows the home by the same
+     * path a {@code /edithome rename} would take. Moving it here as well would run it twice.
+     */
+    @Override
+    public boolean rename(Player player, String home, String newName) {
+        HuskHomesAPI api = api();
+        if (api == null) {
+            return false;
+        }
+        try {
+            api.renameHome(api.adaptUser(player), home, newName);
+            return true;
+            // Broad on purpose, exactly as api() is: a HuskHomes version whose API moved must read
+            // as a refusal rather than take the click handler down with it.
+        } catch (Throwable ex) {
+            logger.log(Level.WARNING, "HuskHomes refused to rename home " + home, ex);
+            return false;
+        }
+    }
+
+    /**
+     * Deletes through {@code deleteHome(User, String)}, which is async and fire-and-forget in the
+     * same way {@link #rename} is.
+     *
+     * <p>The icon row is dropped by the lifecycle listener reacting to HuskHomes'
+     * {@code HomeDeleteEvent}, not here.
+     */
+    @Override
+    public boolean delete(Player player, String home) {
+        HuskHomesAPI api = api();
+        if (api == null) {
+            return false;
+        }
+        try {
+            api.deleteHome(api.adaptUser(player), home);
+            return true;
+        } catch (Throwable ex) {
+            logger.log(Level.WARNING, "HuskHomes refused to delete home " + home, ex);
+            return false;
+        }
+    }
 }

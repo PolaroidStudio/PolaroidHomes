@@ -14,7 +14,7 @@
 # preserving every value you edited, and backs the original up first. Do not edit
 # this by hand: lowering it re-runs migrations, raising it makes the plugin refuse
 # to touch the file.
-config-version: 3
+config-version: 4
 
 # Language file loaded from lang/messages_<language>.yml. Any key missing from
 # that file falls back to the English one shipped inside the jar, so a partial
@@ -42,6 +42,46 @@ hooks:
   # entry animation; HuskHomes can do neither, so a locked slot there simply
   # reads as locked and the animation plays alongside HuskHomes' own warmup.
   home-provider: auto
+
+# ---------------------------------------------------------------------------
+# Commands
+#
+# This plugin registers /homemenu and its aliases (phomes, homesmenu, hmenu).
+# It deliberately does NOT register /homes or /home: whichever home plugin you
+# run already owns both, and it loads first, so a registration here would lose
+# the race silently — players would type /homes, the backend would answer, and
+# this menu would never open. That was a real bug in an earlier release.
+#
+# Interception is the honest way to get the standard name. The typed line is
+# caught before the backend sees it, and only then is the menu opened instead.
+# Turn it off and /homemenu still works, so the plugin is never unreachable.
+# ---------------------------------------------------------------------------
+commands:
+  intercept:
+    # /homes opens this menu instead of the backend's home list. On by default:
+    # a list of your homes is what this plugin draws, so answering /homes with
+    # the picture rather than the text is the whole point.
+    homes: true
+
+    # /home opens this menu instead of teleporting. OFF by default, and you
+    # should think hard before turning it on: /home <name> is the most-run
+    # command on most servers, and while an argument is NEVER swallowed — see
+    # below — a player who types a bare /home expecting their default home
+    # would get a menu instead of a teleport.
+    home: false
+
+  # --- What "intercepted" means, exactly -------------------------------------
+  #
+  # Only the BARE command is ever swallowed. /homes opens the menu;
+  # /homes someplayer does not, because that form belongs to the backend
+  # (it is HuskHomes' own /homelist <player>). Same for /home <name>, which
+  # keeps teleporting no matter what you set above.
+  #
+  # Matching ignores case and a leading slash. A namespaced form is never
+  # intercepted: /essentials:homes is a player naming the plugin they want,
+  # and answering that with a different plugin's menu would be dishonest.
+  #
+  # Adding another label here does nothing — only the two above are read.
 
 # Where the menus are laid out: which rows exist, which slot holds which
 # button, and how each button looks. That all lives in menu.yml, together with
@@ -195,3 +235,28 @@ icons:
   # here. Backend settings are deliberately kept out of this file so that
   # reloading the GUI configuration can never imply reopening a connection pool.
   save-interval-seconds: 120
+
+# ---------------------------------------------------------------------------
+# Blocked worlds
+#
+# Homes are not allowed in the worlds listed here. This is enforced in two
+# places, because a blacklist that only stops new homes leaves every home made
+# before you added the world still working:
+#
+#   Creating   the backend's own home-creation event is cancelled, so it does
+#              not matter how the home was made — /sethome, another plugin, or
+#              an API call all hit the same event. The player is told which
+#              world is blocked.
+#
+#   Existing   a home already in a blocked world still appears in the menu, so
+#              the player can see it and act on it, but it is drawn as
+#              unavailable and teleporting to it is refused. Its lore tells the
+#              player to delete it, which the menu itself can do.
+#
+# Matching ignores case. A name that matches no loaded world is kept and simply
+# never matches: you may blacklist a world before creating it, or leave an
+# entry behind after deleting one, and neither is an error.
+# ---------------------------------------------------------------------------
+worlds:
+  # Example. An empty list means every world is allowed, which is the default.
+  blacklist: []

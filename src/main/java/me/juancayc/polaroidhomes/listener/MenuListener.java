@@ -1,5 +1,6 @@
 package me.juancayc.polaroidhomes.listener;
 
+import me.juancayc.polaroidhomes.edit.DeleteConfirmations;
 import me.juancayc.polaroidhomes.menu.MenuHolder;
 import me.juancayc.polaroidhomes.menu.MenuItemMarker;
 import me.juancayc.polaroidhomes.menu.MenuRegistry;
@@ -49,12 +50,23 @@ public final class MenuListener implements Listener {
     private final Plugin plugin;
     private final MenuRegistry registry;
     private final MenuItemMarker marker;
+
+    /**
+     * Held only so an armed delete dies with the window that armed it.
+     *
+     * <p>Without this a player could arm a delete, close the menu, and have it still armed when
+     * they reopen within the window - the arming would then be confirmed by the first drop click
+     * of a session in which they never saw the warning.
+     */
+    private final DeleteConfirmations deletes;
     private final Map<UUID, Long> lastDispatch = new HashMap<>();
 
-    public MenuListener(Plugin plugin, MenuRegistry registry, MenuItemMarker marker) {
+    public MenuListener(Plugin plugin, MenuRegistry registry, MenuItemMarker marker,
+                        DeleteConfirmations deletes) {
         this.plugin = plugin;
         this.registry = registry;
         this.marker = marker;
+        this.deletes = deletes;
     }
 
     @EventHandler(priority = EventPriority.LOW)
@@ -137,6 +149,7 @@ public final class MenuListener implements Listener {
         }
         registry.close(player);
         lastDispatch.remove(player.getUniqueId());
+        deletes.clear(player.getUniqueId());
         // Delayed: a chrome item that escaped lands in the inventory after the close resolves, so
         // sweeping on the same tick would miss it.
         Bukkit.getScheduler().runTaskLater(plugin,
@@ -164,6 +177,7 @@ public final class MenuListener implements Listener {
         Player player = event.getPlayer();
         registry.close(player);
         lastDispatch.remove(player.getUniqueId());
+        deletes.clear(player.getUniqueId());
     }
 
     /**

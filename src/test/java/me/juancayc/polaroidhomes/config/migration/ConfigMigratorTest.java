@@ -205,13 +205,44 @@ class ConfigMigratorTest {
 
     @Test
     void theShippedRegistryTargetsTheVersionThisJarShips() {
-        // config.yml is at 3: v2 moved max-displayed-slots into menu.yml and turned gui.rows into the
-        // row strings there, v3 added the hooks section that names the home provider. The other files
-        // never needed restructuring, so they stay at the baseline.
-        assertEquals(3, ConfigMigrations.config().targetVersion());
+        // config.yml is at 4: v2 moved max-displayed-slots into menu.yml and turned gui.rows into the
+        // row strings there, v3 added the hooks section that names the home provider, v4 added
+        // commands.intercept and worlds.blacklist. messages_en.yml is at 2, for the rename, delete
+        // and blocked-world keys plus the two new home-button shapes. menu.yml and data.yml never
+        // needed restructuring, so they stay at the baseline.
+        assertEquals(4, ConfigMigrations.config().targetVersion());
         assertEquals(1, ConfigMigrations.menu().targetVersion());
         assertEquals(1, ConfigMigrations.data().targetVersion());
-        assertEquals(1, ConfigMigrations.messages().targetVersion());
+        assertEquals(2, ConfigMigrations.messages().targetVersion());
+    }
+
+    /**
+     * The v3 -> v4 step turns interception OFF for a file that predates it, although the shipped
+     * file has it on.
+     *
+     * <p>That asymmetry is the point: an existing server's players have been typing {@code /homes}
+     * and getting their backend's answer, and changing what that command does during an upgrade
+     * nobody read the changelog for is a surprise rather than a migration. A fresh install has no
+     * such history and gets the shipped default.
+     */
+    @Test
+    void theInterceptStepTurnsInterceptionOffForAnUpgradingFile() {
+        YamlConfiguration config = defaults("config-version: 3\n");
+
+        ConfigMigrations.disableInterceptionOnUpgrade().apply(config);
+
+        assertEquals(false, config.getBoolean("commands.intercept.homes"));
+        assertEquals(false, config.getBoolean("commands.intercept.home"));
+    }
+
+    @Test
+    void theInterceptStepLeavesAnOperatorsOwnChoiceAlone() {
+        YamlConfiguration config = defaults("config-version: 3\n");
+        config.set("commands.intercept.homes", true);
+
+        ConfigMigrations.disableInterceptionOnUpgrade().apply(config);
+
+        assertEquals(true, config.getBoolean("commands.intercept.homes"));
     }
 
     @Test

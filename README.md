@@ -25,6 +25,33 @@ configured tier, so a player can see what the ranks above them are worth.
 and follows the home through a rename; deleting a home drops its icon rather than leaving it
 orphaned.
 
+**Rename and delete from the menu.** A home button carries four actions:
+
+| Click | Action |
+|---|---|
+| Left | Teleport |
+| Right | Rename — the new name is typed in chat |
+| Shift | Change the icon |
+| Drop (`Q`) | Delete — **click twice**, the button arms first and says so |
+
+Delete takes the drop key rather than a mouse button because it is the one input a player cannot hit
+by aiming badly, and because a destructive action should not share a button with a harmless one. It
+never deletes on one press: the first arms the button, which turns red and says what the next press
+does, and the arming expires after five seconds or on any other click. Both operations go through
+the backend's own API, so the backend fires its own event and the icon follows along by the same
+path a command would take.
+
+Rename, delete and the icon picker are all **owner-only**, matching the read-only stance an admin
+already has when they open somebody else's menu with `/homemenu <player>`. Teleport is refused there
+too, and the backends still have their own commands for when an admin genuinely means it.
+
+**A world blacklist.** Worlds listed in `worlds.blacklist` cannot hold homes. New ones are refused at
+the backend's own creation event, and homes already there are shown as unavailable with teleport
+refused and a lore line telling the player to delete them.
+
+**`/homes` without registering it.** Both backends already own that label and load first, so it is
+intercepted rather than registered. See [`commands`](#commands-1).
+
 **Teleport effects.** A departure effect plays where the player stands, and an arrival effect plays
 at the destination. Either a Model Engine animation or vanilla particles, or nothing at all.
 
@@ -101,6 +128,10 @@ whichever backend they were chosen under.
 | Icon follows a rename | yes, via `HomeModifyEvent` | yes, via `HomeEditEvent` |
 | Icon dropped on delete | yes, via `HomeModifyEvent` | yes, via `HomeDeleteEvent` |
 | Teleport through the backend's own path | yes, `essentials:home` | yes, its timed-teleport API |
+| Rename a home from the menu | yes, `IUser#renameHome` | yes, `renameHome(User, String, String)` |
+| Delete a home from the menu | yes, `IUser#delHome` | yes, `deleteHome(User, String)` |
+| Block home creation in a blacklisted world | yes, cancels `HomeModifyEvent` (CREATE and UPDATE) | yes, cancels `HomeCreateEvent` (create only) |
+| Block a home *relocated* into a blacklisted world | **yes**, EssentialsX reports a move as UPDATE | no — see below |
 | Departure and arrival effects | yes | yes |
 | Named ranks on a locked slot | **yes** | no — see below |
 | Warmup stretched to fit the entry animation | **yes** | no — see below |
@@ -121,10 +152,85 @@ the effect plays alongside whatever warmup is already configured, and a warmup s
 `entry.duration` cuts the animation off. Set HuskHomes' warmup to at least that duration if you want
 the whole animation.
 
+**Relocating a home into a blocked world.** EssentialsX fires `HomeModifyEvent` with cause `UPDATE`
+when an existing home is moved, so a home relocated *into* a blacklisted world is refused there.
+HuskHomes routes a relocation through `HomeEditEvent`, which does not distinguish a moved position
+from a changed description, so cancelling it would also refuse edits that have nothing to do with
+worlds. On HuskHomes such a home is therefore created successfully and then caught by the menu: it is
+drawn as unavailable, teleporting to it is refused, and its lore tells the player to delete it. The
+player is never stranded, but the block happens one step later than on EssentialsX.
+
+**Rename and delete are both backends' own APIs, never their storage.** Each call goes through the
+method the backend exposes, so the backend fires its own rename or delete event — which is exactly
+the event this plugin's icon-lifecycle listener is already hooked to. That is why the icon follows a
+menu-driven rename and is dropped on a menu-driven delete without any extra code: the menu takes the
+same path a command would. Writing the backend's files directly would move the home and orphan its
+icon.
+
+HuskHomes' `renameHome` and `deleteHome` return `void` and hand the work to its own async executor,
+so the menu reports "accepted" rather than "done" and never calls `join()` on anything. A rename that
+the HuskHomes database then refuses reports itself through HuskHomes' own message.
+
 **Deleting every home at once.** HuskHomes' `DeleteAllHomesEvent` names the owner but not the homes,
 and this plugin's icon store cannot enumerate a player's rows, so those icons are left behind. They are
 harmless — they are keyed to names nothing resolves — and a home recreated under an old name simply
 gets its old icon back.
+
+### `commands`
+
+```yaml
+commands:
+  intercept:
+    homes: true    # /homes opens the menu
+    home: false    # /home stays the backend's direct teleport
+```
+
+The plugin **registers** `/homemenu` plus the aliases `phomes`, `homesmenu` and `hmenu`. It
+deliberately does **not** register `/homes` or `/home`: EssentialsX registers `homes` as an alias of
+its own `/home`, HuskHomes registers it as an alias of `/homelist`, and both declare `load: BEFORE`.
+A registration here loses that race with nothing logged anywhere, which was a real shipped bug —
+players typed `/homes`, the backend answered, and this menu never opened. `CommandLabelTest` pins the
+registered labels against it.
+
+Interception is the honest way to get the standard name. The typed line is caught in
+`PlayerCommandPreprocessEvent` and answered with the menu before the backend sees it.
+
+**Only the bare command is ever swallowed.** `/homes` opens the menu; `/homes someplayer` does not,
+because that form belongs to the backend — it is HuskHomes' own `/homelist <player>`. The same rule
+protects `/home <name>`, the most-run command on most servers, which keeps teleporting whatever you
+set here. Matching ignores case and a leading slash. A namespaced form is never intercepted:
+`/essentials:homes` is a player naming the plugin they want, and answering that with a different
+plugin's menu would be dishonest.
+
+`/homemenu` and its aliases stay registered regardless, so turning interception off never leaves the
+plugin unreachable. A player without `polaroidhomes.use`, or a server whose backend is not answering,
+has their line passed through untouched rather than swallowed and refused.
+
+Upgrading from an older config leaves interception **off**, although a fresh install ships it on for
+`homes`. Changing what `/homes` does during an upgrade nobody read the changelog for is a surprise
+rather than a migration.
+
+### `worlds`
+
+```yaml
+worlds:
+  blacklist: []
+```
+
+Homes are not allowed in the worlds listed here, and the rule is enforced in two places because a
+blacklist that only stops new homes leaves every home made before you added the world still working.
+
+| | What happens |
+|---|---|
+| Creating a home there | The backend's own creation event is cancelled, so it does not matter how the home was made — `/sethome`, another plugin, or an API call all hit the same event. The player is told which world is blocked. |
+| A home already there | It still appears in the menu, drawn as unavailable with its world marked blocked. Teleporting to it is **refused** with the same message, and its lore tells the player to delete it — which the menu itself can do. |
+
+Hiding such a home would be worse than showing it: the player could not act on the problem. Showing
+it and refusing it gives them the message and the delete button in the same place.
+
+Matching ignores case. A name that matches no loaded world is kept and simply never matches, so you
+may blacklist a world before creating it or leave an entry behind after deleting one; neither is an
+error.
 
 ### `language`
 
@@ -301,8 +407,9 @@ leaves it untouched rather than migrating it backwards and dropping settings it 
 | `/homemenu help` | — | Lists the commands you can use. |
 | `/homemenu <player>` | `polaroidhomes.admin` | Opens an online player's menu, read-only. |
 | `/homemenu reload` | `polaroidhomes.admin` | Re-reads the configuration and the language file. |
+| `/homes` | `polaroidhomes.use` | Opens your homes menu. **Intercepted, not registered** — see [`commands`](#commands-1). Only the bare form; `/homes <player>` still reaches the backend. |
 
-Aliases: `/phomes`, `/homemenu`.
+Aliases: `/phomes`, `/homesmenu`, `/hmenu`.
 
 ## Permissions
 
@@ -310,7 +417,15 @@ Aliases: `/phomes`, `/homemenu`.
 |---|---|---|
 | `polaroidhomes.use` | everyone | Opening the menu and teleporting from it. |
 | `polaroidhomes.icon` | everyone | Changing the icon of your own homes. |
+| `polaroidhomes.rename` | everyone | Renaming your own homes from the menu. |
+| `polaroidhomes.delete` | everyone | Deleting your own homes from the menu, with a confirmation click. |
 | `polaroidhomes.admin` | op | Reloading, and opening another player's menu. |
+
+`polaroidhomes.rename` and `polaroidhomes.delete` follow the style `polaroidhomes.icon` set: on by
+default, because they act on the player's own homes and both backends already let them do the same
+thing by command. Revoking one hides nothing — the action still refuses with the ordinary
+no-permission message — but revoking it does not take the backend's own `/delhome` away, so it only
+closes the menu route.
 
 Home limits are **not** granted here. They come from your home plugin:
 `essentials.sethome.multiple.<group>` on EssentialsX, `huskhomes.max_homes.<n>` on HuskHomes.

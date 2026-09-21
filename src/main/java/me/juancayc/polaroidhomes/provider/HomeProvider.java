@@ -67,4 +67,43 @@ public interface HomeProvider {
      *         player rather than leaving them staring at a closed menu
      */
     boolean teleport(Player player, String home);
+
+    /**
+     * Whether this backend can rename a home through its own API.
+     *
+     * <p>Asked rather than assumed so a backend that cannot is told about instead of faked. The
+     * menu hides the rename action entirely for a provider answering false: an action that is
+     * visible and refuses every click reads as a broken plugin, while an absent one reads as a
+     * feature this backend does not have — which is what it is.
+     */
+    boolean supportsRename();
+
+    /** Whether this backend can delete a home through its own API. See {@link #supportsRename}. */
+    boolean supportsDelete();
+
+    /**
+     * Renames one of the player's own homes through the backend's own path.
+     *
+     * <p>Routed through the backend for the same reason {@link #teleport} is: the backend fires its
+     * own rename event, and this plugin's icon-lifecycle listener is hooked to exactly that event.
+     * Writing the backend's storage directly would move the home and orphan its icon.
+     *
+     * <p>The caller has already validated the name — see {@code HomeNameRules} — so a false here
+     * means the backend refused, not that the name was bad.
+     *
+     * @return false when the backend is unavailable or refused, which the caller reports to the
+     *         player
+     */
+    boolean rename(Player player, String home, String newName);
+
+    /**
+     * Deletes one of the player's own homes through the backend's own path.
+     *
+     * <p>The icon row is dropped by the icon-lifecycle listener reacting to the backend's own delete
+     * event, not here, so a delete performed by any route — this menu, a command, another plugin —
+     * cleans up the same way.
+     *
+     * @return false when the backend is unavailable or refused
+     */
+    boolean delete(Player player, String home);
 }

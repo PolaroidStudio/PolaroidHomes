@@ -1,5 +1,7 @@
 package me.juancayc.polaroidhomes.config;
 
+import me.juancayc.polaroidhomes.intercept.CommandInterceptor;
+import me.juancayc.polaroidhomes.world.WorldBlacklist;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.configuration.ConfigurationSection;
@@ -7,8 +9,10 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /** Typed view over config.yml, re-read whenever the plugin reloads. */
 public final class PluginConfig {
@@ -34,6 +38,9 @@ public final class PluginConfig {
     private long saveIntervalTicks;
 
     private String homeProvider;
+
+    private WorldBlacklist worldBlacklist;
+    private CommandInterceptor interceptor;
 
     public PluginConfig(Plugin plugin) {
         this.plugin = plugin;
@@ -73,6 +80,16 @@ public final class PluginConfig {
         this.arrival = EffectSettings.from(section(effects, "arrival"), Particle.END_ROD, 1.5D);
         this.maxEffectSeconds = Math.max(1.0D,
                 config.getDouble("teleport-effects.max-effect-seconds", 10.0D));
+
+        this.worldBlacklist = WorldBlacklist.of(config.getStringList("worlds.blacklist"));
+
+        // Read as an explicit two-key lookup rather than by walking the section's children: the
+        // section's comments document exactly two labels, and a third one an operator added would
+        // otherwise be silently honoured, intercepting a command nothing in this plugin can serve.
+        Map<String, Boolean> intercept = new LinkedHashMap<>();
+        intercept.put("homes", config.getBoolean("commands.intercept.homes", true));
+        intercept.put("home", config.getBoolean("commands.intercept.home", false));
+        this.interceptor = CommandInterceptor.of(intercept);
 
         long intervalSeconds = Math.max(5L, config.getLong("icons.save-interval-seconds", 120L));
         this.saveIntervalTicks = intervalSeconds * 20L;
@@ -162,5 +179,15 @@ public final class PluginConfig {
 
     public long saveIntervalTicks() {
         return saveIntervalTicks;
+    }
+
+    /** The worlds homes are not allowed in. Never null; an unconfigured list blocks nothing. */
+    public WorldBlacklist worldBlacklist() {
+        return worldBlacklist;
+    }
+
+    /** Which typed command labels open the menu instead of reaching their owner. */
+    public CommandInterceptor interceptor() {
+        return interceptor;
     }
 }

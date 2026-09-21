@@ -1,5 +1,7 @@
 package me.juancayc.polaroidhomes.menu;
 
+import me.juancayc.polaroidhomes.edit.DeleteConfirmations;
+import me.juancayc.polaroidhomes.edit.RenamePrompts;
 import me.juancayc.polaroidhomes.provider.HomeSnapshot;
 import me.juancayc.polaroidhomes.provider.HomeTier;
 import me.juancayc.polaroidhomes.text.MessageService;
@@ -8,6 +10,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
@@ -202,25 +205,64 @@ public final class HomesMenu extends MenuHolder {
         }
     }
 
+    /**
+     * Draws one home and wires its four actions.
+     *
+     * <h2>The click mapping</h2>
+     * <ul>
+     *   <li>left click - teleport</li>
+     *   <li>right click - rename</li>
+     *   <li>shift click - change icon</li>
+     *   <li>drop (Q) - delete, armed then confirmed</li>
+     * </ul>
+     *
+     * <p>Shift-click keeps the icon picker it has always had: the action is shipped and players
+     * already know it, so moving it to buy a tidier mapping would cost more than it bought.
+     * Right-click takes rename because it was free and is the cheapest click to reach. Delete takes
+     * the drop key because that is the one input a player cannot hit by aiming badly - every other
+     * gesture here is a mouse button on the same square - and because a destructive action should
+     * not share a button with a harmless one. Shift is tested first because a shift-right-click
+     * reports as both.
+     *
+     * <p>Every action but teleport is owner-only, matching the read-only stance the teleport path
+     * already takes for an admin viewing somebody else's menu. An admin inspecting another player's
+     * homes is inspecting; renaming or deleting somebody else's home from a window they opened to
+     * look at it is a misclick away from a support ticket, and both backends still offer their own
+     * commands for when it is actually meant.
+     */
     private void drawHome(Inventory inventory, int slot, String home) {
         String reference = context.icons().icon(targetId, home);
         if (reference == null) {
             reference = context.config().defaultIcon();
         }
         Location location = snapshot.location(home);
+        String worldName = location == null || location.getWorld() == null
+                ? null
+                : location.getWorld().getName();
+        boolean blocked = context.config().worldBlacklist().isBlocked(worldName);
         // The status word is server text and may carry its own colour tags, so it is substituted
         // as-is. A world name is not: it is escaped, because only the untrusted side needs it and
         // escaping the status word would print its tags as literal text.
-        String world = location == null || location.getWorld() == null
+        String world = worldName == null
                 ? context.messages().raw("status.none", "<#315a7a>None")
-                : MessageService.escape(location.getWorld().getName());
+                : MessageService.escape(worldName);
+
+        boolean armed = ownWindow
+                && context.deletes().isArmed(targetId, home, System.currentTimeMillis());
+        // Three shapes for one button, chosen here rather than by editing one lore in place: an
+        // armed delete and a blocked world both change what the button IS, not just what it says,
+        // and a player scanning the grid has to be able to tell at a glance.
+        String nameKey = armed ? "menu.homes.home_armed.name"
+                : blocked ? "menu.homes.home_blocked.name" : "menu.homes.home.name";
+        String loreKey = armed ? "menu.homes.home_armed.lore"
+                : blocked ? "menu.homes.home_blocked.lore" : "menu.homes.home.lore";
 
         // The home's own icon comes from the icon store, never from menu.yml, so this one button
         // keeps its reference and its text from the existing path rather than from the template.
         ItemStack item = context.items().button(
                 reference,
-                "menu.homes.home.name",
-                "menu.homes.home.lore",
+                nameKey,
+                loreKey,
                 Material.LIGHT_BLUE_BED,
                 "%home%", MessageService.escape(home),
                 "%world%", world,
@@ -229,24 +271,140 @@ public final class HomesMenu extends MenuHolder {
                 "%z%", location == null ? "?" : String.valueOf(location.getBlockZ()));
         inventory.setItem(slot, item);
 
-        handlers().put(slot, (player, click) -> {
-            context.playClick(player);
-            if (click.isShiftClick()) {
-                if (!player.hasPermission("polaroidhomes.icon")) {
-                    context.messages().send(player, "general.no_permission");
-                    return;
-                }
-                context.registry().open(player, new IconMenu(context, player, targetId, home, this));
-                return;
-            }
+        handlers().put(slot, (player, click) -> onHomeClick(player, click, home, worldName));
+    }
+
+    /**
+     * Dispatches one click on a home button.
+     *
+     * <p>Split out of the render so the mapping reads as one block rather than as a lambda buried
+     * in item construction. The order of the tests is the mapping: shift first because a
+     * shift-right-click reports as both, drop next because it is the destructive one and must not
+     * fall through to anything, then right, then everything else as teleport.
+     */
+    private void onHomeClick(Player player, ClickType click, String home, String worldName) {
+        if (click.isShiftClick()) {
             if (!ownWindow) {
-                // An admin looking at somebody else's homes is inspecting, not travelling. Moving
-                // them to another player's bedroom on a stray click helps nobody.
                 return;
             }
-            player.closeInventory();
-            onTeleport.run(player, home);
-        });
+            context.playClick(player);
+            if (!player.hasPermission("polaroidhomes.icon")) {
+                context.messages().send(player, "general.no_permission");
+                return;
+            }
+            context.registry().open(player, new IconMenu(context, player, targetId, home, this));
+            return;
+        }
+
+        if (click == ClickType.DROP || click == ClickType.CONTROL_DROP) {
+            if (!ownWindow) {
+                return;
+            }
+            context.playClick(player);
+            onDelete(player, home);
+            return;
+        }
+
+        if (click == ClickType.RIGHT) {
+            if (!ownWindow) {
+                return;
+            }
+            context.playClick(player);
+            onRename(player, home);
+            return;
+        }
+
+        if (!ownWindow) {
+            // An admin looking at somebody else's homes is inspecting, not travelling. Moving
+            // them to another player's bedroom on a stray click helps nobody.
+            return;
+        }
+
+        // Disarming here rather than only on the delete path is what makes the armed lore's
+        // "any other click to stop" line true: a player who armed a delete by mistake gets out of
+        // it with the click they were about to make anyway.
+        context.deletes().clear(targetId);
+        context.playClick(player);
+
+        if (context.config().worldBlacklist().isBlocked(worldName)) {
+            // Refused rather than attempted: the backend would happily send the player into a world
+            // the operator has blocked, and the whole point of the blacklist is that it does not.
+            context.messages().send(player, "worlds.blocked_teleport",
+                    "%home%", MessageService.escape(home),
+                    "%world%", MessageService.escape(worldName));
+            render(player);
+            return;
+        }
+
+        player.closeInventory();
+        onTeleport.run(player, home);
+    }
+
+    /** Opens the chat prompt that reads the new name. */
+    private void onRename(Player player, String home) {
+        if (!player.hasPermission("polaroidhomes.rename")) {
+            context.messages().send(player, "general.no_permission");
+            return;
+        }
+        if (!context.provider().supportsRename()) {
+            context.messages().send(player, "rename.unsupported",
+                    "%provider%", context.provider().pluginName());
+            return;
+        }
+        // Arming and renaming are separate decisions, so starting one cancels the other rather
+        // than leaving a home armed for deletion behind a prompt the player is now reading.
+        context.deletes().clear(targetId);
+        context.renames().open(player, home, System.currentTimeMillis());
+        // The window is closed because the input is in chat: a player typing behind an open
+        // inventory cannot see what they are writing.
+        player.closeInventory();
+        context.messages().send(player, "rename.prompt",
+                "%home%", MessageService.escape(home),
+                "%cancel%", RenamePrompts.CANCEL_WORD,
+                "%seconds%", String.valueOf(RenamePrompts.TIMEOUT_SECONDS));
+    }
+
+    /**
+     * Arms a delete, or performs one that was already armed.
+     *
+     * <p>The window is re-rendered on the arming so the button says it is armed. After a deletion
+     * it is closed instead: the snapshot this window holds was taken before the click and still
+     * lists the home that has just gone, and a grid redrawn from it would show a home that no
+     * longer exists.
+     */
+    private void onDelete(Player player, String home) {
+        if (!player.hasPermission("polaroidhomes.delete")) {
+            context.messages().send(player, "general.no_permission");
+            return;
+        }
+        if (!context.provider().supportsDelete()) {
+            context.messages().send(player, "delete.unsupported",
+                    "%provider%", context.provider().pluginName());
+            return;
+        }
+
+        DeleteConfirmations.Outcome outcome =
+                context.deletes().click(targetId, home, System.currentTimeMillis());
+        if (outcome == DeleteConfirmations.Outcome.ARMED) {
+            context.messages().send(player, "delete.armed",
+                    "%home%", MessageService.escape(home),
+                    "%seconds%", String.valueOf(DeleteConfirmations.WINDOW_MILLIS / 1000L));
+            render(player);
+            return;
+        }
+
+        if (!context.provider().delete(player, home)) {
+            context.messages().send(player, "delete.failed",
+                    "%home%", MessageService.escape(home));
+            render(player);
+            return;
+        }
+        context.messages().send(player, "delete.done", "%home%", MessageService.escape(home));
+        // The icon row is NOT dropped here. Both backends fire their own delete event, and this
+        // plugin's icon-lifecycle listener is hooked to exactly that event, so dropping it here as
+        // well would run the same removal twice - and would do it for a delete that another route
+        // is already handling correctly.
+        player.closeInventory();
     }
 
     private void drawEmptySlot(Inventory inventory, int slot) {

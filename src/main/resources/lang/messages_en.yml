@@ -1,6 +1,6 @@
-version: 1
+version: 2
 # Schema version of this file, migrated forward automatically on enable. Do not edit by hand.
-config-version: 1
+config-version: 2
 # Base language file. Copy to messages_<lang>.yml to translate.
 # Missing keys fall back to this file automatically (setDefaults), so a partial translation
 # never shows a raw key to a player. Keep this file complete.
@@ -36,6 +36,35 @@ homes:
     hover: "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ᴡʀɪᴛᴇ ᴛʜᴇ ᴄᴏᴍᴍᴀɴᴅ"
     click: "[SUGGEST_COMMAND] /sethome "
 
+rename:
+  # Sent when the rename prompt opens. The player types the new name in chat.
+  prompt:
+    text: "<#E9FDFB>Type the new name for <#f2c42f>%home%<#E9FDFB> in chat, or <#f2c42f>%cancel%<#E9FDFB> to stop."
+    hover: "<#315a7a>You have <#E9FDFB>%seconds%<#315a7a> seconds."
+  cancelled: "<#315a7a>Rename cancelled. <#f2c42f>%home%<#315a7a> was left alone."
+  expired: "<#315a7a>The rename prompt for <#f2c42f>%home%<#315a7a> expired."
+  done: "<#95d027><#f2c42f>%home%<#95d027> is now called <#f2c42f>%new%<#95d027>."
+  failed: "<#eb4b30><#f2c42f>%home%<#eb4b30> could not be renamed."
+  unsupported: "<#eb4b30><#f2c42f>%provider%<#eb4b30> cannot rename a home."
+  # One key per rule in HomeNameRules, so the player is told which one they broke.
+  invalid_empty: "<#eb4b30>A home name cannot be blank."
+  invalid_too_long: "<#eb4b30>That name is too long. The limit is <#f2c42f>%max%<#eb4b30> characters."
+  invalid_characters: "<#eb4b30>Use only letters, numbers, <#f2c42f>_<#eb4b30> and <#f2c42f>-<#eb4b30>. A space or a dot would make the home unreachable by command."
+  invalid_duplicate: "<#eb4b30>You already have a home called <#f2c42f>%new%<#eb4b30>."
+  invalid_unchanged: "<#315a7a><#f2c42f>%home%<#315a7a> already has that name."
+
+delete:
+  # The armed state. Deliberately a warning colour, not an error: nothing has gone wrong yet.
+  armed: "<#f2c42f>Click again within <#eb4b30>%seconds%s<#f2c42f> to delete <#eb4b30>%home%<#f2c42f>. This cannot be undone."
+  done: "<#95d027><#f2c42f>%home%<#95d027> was deleted."
+  failed: "<#eb4b30><#f2c42f>%home%<#eb4b30> could not be deleted."
+  unsupported: "<#eb4b30><#f2c42f>%provider%<#eb4b30> cannot delete a home."
+
+worlds:
+  # The one sentence that has to name the world and say what to do about it.
+  blocked_teleport: "<#eb4b30><#f2c42f>%home%<#eb4b30> is in <#f2c42f>%world%<#eb4b30>, which is blocked. Delete it from the menu."
+  blocked_create: "<#eb4b30>Homes are not allowed in <#f2c42f>%world%<#eb4b30>."
+
 icons:
   changed: "<#95d027>Icon for <#f2c42f>%home%<#95d027> updated."
   reset: "<#95d027>Icon for <#f2c42f>%home%<#95d027> reset to the default."
@@ -70,7 +99,32 @@ menu:
         - "<#95d027> • ᴡᴏʀʟᴅ: <#E9FDFB>%world%"
         - "<#cd80f7> • x: <#E9FDFB>%x% <#cd80f7>ʏ: <#E9FDFB>%y% <#cd80f7>ᴢ: <#E9FDFB>%z%"
         - ""
-        - "<#95d027>▸ ᴄʟɪᴄᴋ ᴛᴏ ᴛᴇʟᴇᴘᴏʀᴛ"
+        - "<#95d027>▸ ʟᴇғᴛ-ᴄʟɪᴄᴋ ᴛᴏ ᴛᴇʟᴇᴘᴏʀᴛ"
+        - "<#95d027>▸ ʀɪɢʜᴛ-ᴄʟɪᴄᴋ ᴛᴏ ʀᴇɴᴀᴍᴇ"
+        - "<#95d027>▸ sʜɪғᴛ-ᴄʟɪᴄᴋ ᴛᴏ ᴄʜᴀɴɢᴇ ɪᴄᴏɴ"
+        - "<#95d027>▸ ᴅʀᴏᴘ (ǫ) ᴛᴏ ᴅᴇʟᴇᴛᴇ"
+    # Drawn instead of `home` when a delete is armed on this home. Red, because the next
+    # click is destructive — this is the one home button that has earned the error colour.
+    home_armed:
+      name: "<#eb4b30>%home%"
+      lore:
+        - "<#E9FDFB>Press drop again to delete this home."
+        - "<#E9FDFB>This cannot be undone."
+        - ""
+        - "<#eb4b30>▸ ᴅʀᴏᴘ (ǫ) ᴀɢᴀɪɴ ᴛᴏ ᴅᴇʟᴇᴛᴇ"
+        - "<#95d027>▸ ᴀɴʏ ᴏᴛʜᴇʀ ᴄʟɪᴄᴋ ᴛᴏ sᴛᴏᴘ"
+    # Drawn instead of `home` when the home sits in a blocked world. The home is real and
+    # still listed — hiding it would leave the player unable to act on the problem — but
+    # teleporting to it is refused, so the only action offered is the one that resolves it.
+    home_blocked:
+      name: "<#9b336e>%home%"
+      lore:
+        - "<#eb4b30> • ᴡᴏʀʟᴅ: <#E9FDFB>%world% <#eb4b30>(ʙʟᴏᴄᴋᴇᴅ)"
+        - ""
+        - "<#E9FDFB>This world is blocked, so this home"
+        - "<#E9FDFB>cannot be used. Delete it."
+        - ""
+        - "<#eb4b30>▸ ᴅʀᴏᴘ (ǫ) ᴛᴏ ᴅᴇʟᴇᴛᴇ"
         - "<#95d027>▸ sʜɪғᴛ-ᴄʟɪᴄᴋ ᴛᴏ ᴄʜᴀɴɢᴇ ɪᴄᴏɴ"
     empty:
       name: "<#f2c42f>ғʀᴇᴇ sʟᴏᴛ"

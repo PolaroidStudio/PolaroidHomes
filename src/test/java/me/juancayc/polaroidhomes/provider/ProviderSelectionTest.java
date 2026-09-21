@@ -55,6 +55,29 @@ class ProviderSelectionTest {
         public boolean teleport(Player player, String home) {
             return false;
         }
+
+        // Selection never asks about editing, so these answer the simplest thing that is not a
+        // lie: this fake cannot edit anything.
+
+        @Override
+        public boolean supportsRename() {
+            return false;
+        }
+
+        @Override
+        public boolean supportsDelete() {
+            return false;
+        }
+
+        @Override
+        public boolean rename(Player player, String home, String newName) {
+            return false;
+        }
+
+        @Override
+        public boolean delete(Player player, String home) {
+            return false;
+        }
     }
 
     private static final FakeProvider ESSENTIALS_ON = new FakeProvider("essentialsx", true);

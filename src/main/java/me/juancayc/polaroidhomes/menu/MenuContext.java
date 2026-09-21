@@ -2,6 +2,8 @@ package me.juancayc.polaroidhomes.menu;
 
 import me.juancayc.polaroidhomes.config.MenuConfig;
 import me.juancayc.polaroidhomes.config.PluginConfig;
+import me.juancayc.polaroidhomes.edit.DeleteConfirmations;
+import me.juancayc.polaroidhomes.edit.RenamePrompts;
 import me.juancayc.polaroidhomes.provider.HomeProvider;
 import me.juancayc.polaroidhomes.icon.IconStorage;
 import me.juancayc.polaroidhomes.item.ItemManager;
@@ -24,7 +26,9 @@ public record MenuContext(Plugin plugin,
                           MenuItems items,
                           MenuRegistry registry,
                           HomeProvider provider,
-                          IconStorage icons) {
+                          IconStorage icons,
+                          DeleteConfirmations deletes,
+                          RenamePrompts renames) {
 
     /**
      * True when an item reference produces something the server can actually render.

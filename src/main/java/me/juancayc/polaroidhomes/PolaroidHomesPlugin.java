@@ -8,17 +8,23 @@ import me.juancayc.polaroidhomes.config.migration.ConfigMigrations;
 import me.juancayc.polaroidhomes.effect.ModelEngineEffect;
 import me.juancayc.polaroidhomes.effect.TeleportEffect;
 import me.juancayc.polaroidhomes.effect.TeleportEffectFactory;
+import me.juancayc.polaroidhomes.edit.DeleteConfirmations;
+import me.juancayc.polaroidhomes.edit.RenamePrompts;
 import me.juancayc.polaroidhomes.icon.IconStorage;
 import me.juancayc.polaroidhomes.icon.LegacyIconImport;
 import me.juancayc.polaroidhomes.icon.SqlIconStorage;
 import me.juancayc.polaroidhomes.item.ItemManager;
+import me.juancayc.polaroidhomes.listener.CommandInterceptListener;
 import me.juancayc.polaroidhomes.listener.EffectMarkerSweepListener;
 import me.juancayc.polaroidhomes.listener.HuskHomesIconLifecycleListener;
 import me.juancayc.polaroidhomes.listener.HuskHomesTeleportListener;
 import me.juancayc.polaroidhomes.listener.IconCacheListener;
 import me.juancayc.polaroidhomes.listener.IconLifecycleListener;
 import me.juancayc.polaroidhomes.listener.MenuItemCleanupListener;
+import me.juancayc.polaroidhomes.listener.HuskHomesWorldBlacklistListener;
 import me.juancayc.polaroidhomes.listener.MenuListener;
+import me.juancayc.polaroidhomes.listener.RenameChatListener;
+import me.juancayc.polaroidhomes.listener.WorldBlacklistListener;
 import me.juancayc.polaroidhomes.listener.TeleportListener;
 import me.juancayc.polaroidhomes.menu.HomesMenu;
 import me.juancayc.polaroidhomes.menu.MenuContext;
@@ -73,6 +79,24 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
     private Listener teleportListener;
     private BukkitTask saveTask;
 
+    /**
+     * The provider-specific home-creation blocker, kept only so a reload can unregister it.
+     *
+     * <p>Typed as Listener for the same reason the teleport listener is: the two providers announce
+     * a home creation through unrelated event classes that share no supertype.
+     */
+    private Listener worldBlacklistListener;
+
+    /**
+     * The two pieces of edit state, owned here rather than by a window.
+     *
+     * <p>A menu is rebuilt on every page flip and replaced on every reopen, so state that has to
+     * outlive one window - an armed delete the player is about to confirm, a rename prompt whose
+     * answer arrives after the window closed - cannot live on the window.
+     */
+    private final DeleteConfirmations deletes = new DeleteConfirmations();
+    private final RenamePrompts renames = new RenamePrompts();
+
     @Override
     public void onEnable() {
         saveDefaultConfig();
@@ -121,6 +145,8 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
             // looks functional and does nothing.
             registry.closeAll();
         }
+        deletes.clearAll();
+        renames.clearAll();
         if (effect != null) {
             // Last chance to take spawned markers with us. Skipping it is how ghost entities
             // accumulate across reloads.
@@ -217,12 +243,12 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
     private void rebuildContext() {
         MenuItems menuItems = new MenuItems(items, messages, marker, getLogger());
         this.menuContext = new MenuContext(this, config, menus, messages, items, menuItems,
-                registry, provider, icons);
+                registry, provider, icons, deletes, renames);
     }
 
     private void registerListeners() {
         getServer().getPluginManager().registerEvents(
-                new MenuListener(this, registry, marker), this);
+                new MenuListener(this, registry, marker, deletes), this);
         getServer().getPluginManager().registerEvents(
                 new MenuItemCleanupListener(marker), this);
         // Only the selected provider's listeners are registered. Registering both would need the
@@ -236,6 +262,16 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
 
         this.teleportListener = teleportListener();
         getServer().getPluginManager().registerEvents(teleportListener, this);
+
+        this.worldBlacklistListener = worldBlacklistListener();
+        getServer().getPluginManager().registerEvents(worldBlacklistListener, this);
+
+        getServer().getPluginManager().registerEvents(
+                new RenameChatListener(this, renames), this);
+        // Registered unconditionally, and gated by the config inside the listener instead: an
+        // operator turning interception on with /homemenu reload must not have to restart to get a
+        // listener that was skipped at enable.
+        getServer().getPluginManager().registerEvents(new CommandInterceptListener(this), this);
 
         if (effect instanceof ModelEngineEffect modelEngine) {
             // Only registered for the effect that actually spawns entities; the other two have
@@ -263,6 +299,22 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
         return "huskhomes".equals(provider.id())
                 ? new HuskHomesTeleportListener(this, config, effect)
                 : new TeleportListener(this, config, effect);
+    }
+
+    /**
+     * The home-creation blocker for the selected provider.
+     *
+     * <p>Split by provider for the same reason the other two are: EssentialsX announces a creation
+     * through {@code HomeModifyEvent} with a cause and HuskHomes through {@code HomeCreateEvent},
+     * and a single class referencing both cannot load on a server that has only one of them.
+     *
+     * <p>The config and the message service are passed as suppliers reading this object's own
+     * fields, so a reload that replaces either is picked up without re-registering the listener.
+     */
+    private Listener worldBlacklistListener() {
+        return "huskhomes".equals(provider.id())
+                ? new HuskHomesWorldBlacklistListener(() -> config, () -> messages)
+                : new WorldBlacklistListener(() -> config, () -> messages);
     }
 
     /** Both listeners hold a pending set that must not survive the effect they decorate. */
@@ -329,6 +381,10 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
      */
     public void reloadEverything() {
         registry.closeAll();
+        // Dropped with the windows they belong to. An armed delete whose button has just been
+        // closed out from under the player must not still be armed when they reopen the menu.
+        deletes.clearAll();
+        renames.clearAll();
 
         config.reload();
         // Re-read here, not only on enable: a layout change is the most common reason an operator
@@ -362,6 +418,14 @@ public final class PolaroidHomesPlugin extends JavaPlugin {
             }
             this.iconLifecycle = iconLifecycleListener();
             getServer().getPluginManager().registerEvents(iconLifecycle, this);
+
+            // The creation blocker is per provider too, so a swap has to re-hook it or new homes
+            // would keep being checked against the backend that is no longer in use.
+            if (worldBlacklistListener != null) {
+                HandlerList.unregisterAll(worldBlacklistListener);
+            }
+            this.worldBlacklistListener = worldBlacklistListener();
+            getServer().getPluginManager().registerEvents(worldBlacklistListener, this);
         }
 
         rebuildContext();

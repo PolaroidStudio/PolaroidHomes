@@ -177,4 +177,70 @@ public final class EssentialsHomeProvider implements HomeProvider {
         }
         return Bukkit.dispatchCommand(player, "essentials:home " + home);
     }
+
+    /** EssentialsX exposes {@code IUser#renameHome}, so the menu can offer the action. */
+    @Override
+    public boolean supportsRename() {
+        return true;
+    }
+
+    /** EssentialsX exposes {@code IUser#delHome}, so the menu can offer the action. */
+    @Override
+    public boolean supportsDelete() {
+        return true;
+    }
+
+    /**
+     * Renames through {@code IUser#renameHome}, which fires EssentialsX's own
+     * {@code HomeModifyEvent} with cause RENAME.
+     *
+     * <p>That event is what {@code IconLifecycleListener} is already hooked to, so the icon moves to
+     * the new name by the same path a {@code /renamehome} would take. Nothing extra is done here:
+     * doing the icon move here as well would run it twice, and the second run would look up a
+     * source key the first one has already emptied.
+     *
+     * <p>{@code renameHome} declares {@code throws Exception} — it throws when the old name does not
+     * exist — so the broad catch is the interface's, not a precaution.
+     */
+    @Override
+    public boolean rename(Player player, String home, String newName) {
+        IUser user = user(player);
+        if (user == null) {
+            return false;
+        }
+        try {
+            user.renameHome(home, newName);
+            return true;
+        } catch (Exception ex) {
+            logger.log(Level.WARNING, "EssentialsX refused to rename home " + home, ex);
+            return false;
+        }
+    }
+
+    /**
+     * Deletes through {@code IUser#delHome}, which fires {@code HomeModifyEvent} with cause DELETE.
+     *
+     * <p>The icon row is dropped by the lifecycle listener reacting to that event, for the same
+     * reason the rename does not move it here.
+     */
+    @Override
+    public boolean delete(Player player, String home) {
+        IUser user = user(player);
+        if (user == null) {
+            return false;
+        }
+        try {
+            user.delHome(home);
+            return true;
+        } catch (Exception ex) {
+            logger.log(Level.WARNING, "EssentialsX refused to delete home " + home, ex);
+            return false;
+        }
+    }
+
+    /** The EssentialsX user for a connected player, or null when EssentialsX is not answering. */
+    private @Nullable IUser user(Player player) {
+        Essentials ess = essentials();
+        return ess == null ? null : ess.getUser(player);
+    }
 }

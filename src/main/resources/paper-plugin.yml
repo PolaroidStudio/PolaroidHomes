@@ -58,6 +58,10 @@ dependencies:
 # /homemenu, its aliases and its description are registered in code through the COMMANDS lifecycle
 # event — see PolaroidHomesPlugin#registerCommand(). Declaring them here would be silently ignored
 # and getCommand() would throw on enable.
+#
+# /homes and /home are NOT registered anywhere, on purpose: both backends already own them and load
+# first, so a registration would lose the race silently. They are reached by interception instead —
+# see commands.intercept in config.yml and CommandInterceptListener.
 
 permissions:
   polaroidhomes.use:
@@ -65,6 +69,12 @@ permissions:
     default: true
   polaroidhomes.icon:
     description: Change the icon of your own homes.
+    default: true
+  polaroidhomes.rename:
+    description: Rename your own homes from the menu.
+    default: true
+  polaroidhomes.delete:
+    description: Delete your own homes from the menu, with a confirmation click.
     default: true
   polaroidhomes.admin:
     description: Reload the configuration and open another player's menu.

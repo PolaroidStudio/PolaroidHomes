@@ -32,9 +32,9 @@ import java.util.logging.Level;
 public final class ConfigMigrations {
 
     /** Baseline. Bump alongside {@code config-version} in the matching resource file. */
-    public static final int CONFIG_VERSION = 3;
+    public static final int CONFIG_VERSION = 4;
     public static final int DATA_VERSION = 1;
-    public static final int MESSAGES_VERSION = 1;
+    public static final int MESSAGES_VERSION = 2;
 
     /**
      * menu.yml's baseline.
@@ -63,7 +63,16 @@ public final class ConfigMigrations {
                 // choosing EssentialsX today but would silently change backend the day the operator
                 // installs HuskHomes. Pinning the backend the icons were recorded against is the
                 // only answer that cannot move under them.
-                .step(2, pinExistingInstallToEssentials());
+                .step(2, pinExistingInstallToEssentials())
+                // v3 -> v4: command interception and the world blacklist arrived. Both are written
+                // explicitly for the same reason v3's step was: the engine's add-absent-keys pass
+                // would give this install the SHIPPED defaults, and for interception the shipped
+                // default turns a feature on. An existing server's players have been typing /homes
+                // and getting their backend's answer for as long as the plugin has been installed;
+                // changing what that command does during an upgrade they did not read about is not
+                // a migration, it is a surprise. So an upgrading file gets interception off, and a
+                // fresh install gets the shipped 'homes: true' from the file itself.
+                .step(3, disableInterceptionOnUpgrade());
     }
 
     public static FileMigration menu() {
@@ -93,6 +102,25 @@ public final class ConfigMigrations {
         return config -> {
             if (!config.contains("hooks.home-provider")) {
                 config.set("hooks.home-provider", "essentialsx");
+            }
+        };
+    }
+
+    /**
+     * Writes {@code commands.intercept} off into a config.yml that predates the section.
+     *
+     * <p>{@code worlds.blacklist} is deliberately NOT written here: the engine's add-absent-keys
+     * pass gives it the shipped empty list, and an empty blacklist blocks nothing, so the shipped
+     * default and the correct upgrade value are the same thing. Interception is the opposite case —
+     * its shipped default is on — which is the whole reason this step exists.
+     */
+    public static MigrationStep disableInterceptionOnUpgrade() {
+        return config -> {
+            if (!config.contains("commands.intercept.homes")) {
+                config.set("commands.intercept.homes", false);
+            }
+            if (!config.contains("commands.intercept.home")) {
+                config.set("commands.intercept.home", false);
             }
         };
     }
