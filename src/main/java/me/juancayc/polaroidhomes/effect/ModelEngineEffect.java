@@ -14,7 +14,6 @@ import org.bukkit.plugin.Plugin;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -111,13 +110,14 @@ public final class ModelEngineEffect implements TeleportEffect {
             }
             liveModels.put(marker, modeled);
 
-            // addModel returns Optional<ActiveModel>, NOT void: an empty Optional means the model
-            // was rejected and never mounted. Ignoring it is what turns a bad config into a silent
-            // no-op, because the getAnimationHandler() call below would then run against a model
-            // that is not attached to anything.
-            Optional<ActiveModel> mounted = modeled.addModel(model, true);
-            if (mounted.isEmpty()) {
-                warnOnce(settings.model(), "Model Engine refused to mount it");
+            // addModel follows Map.put's shape: the Optional it returns holds the model this one
+            // DISPLACED, not the one just mounted, so on a marker spawned a line ago it is always
+            // empty — including on success. Treating that as a rejection is what made every effect
+            // silently abort. What actually proves the mount is the entity's own model map.
+            modeled.addModel(model, true);
+            ActiveModel mounted = modeled.getModels().values().stream().findFirst().orElse(null);
+            if (mounted == null) {
+                warnOnce(settings.model(), "Model Engine accepted no model for the marker entity");
                 discard(marker, modeled);
                 return;
             }
@@ -126,7 +126,7 @@ public final class ModelEngineEffect implements TeleportEffect {
             // the removal below is scheduled from the declared duration and not from the API.
             // A null property means the animation id is absent from an otherwise valid model —
             // worth saying out loud, but the marker still plays out its duration and is cleaned up.
-            if (mounted.get().getAnimationHandler()
+            if (mounted.getAnimationHandler()
                     .playAnimation(settings.animation(), 0.0D, 0.0D, 1.0D, true) == null) {
                 warnOnce(settings.model() + "#" + settings.animation(),
                         "the model has no animation by that name");
