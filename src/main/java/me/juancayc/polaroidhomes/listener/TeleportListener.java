@@ -1,6 +1,7 @@
 package me.juancayc.polaroidhomes.listener;
 
 import me.juancayc.polaroidhomes.config.PluginConfig;
+import me.juancayc.polaroidhomes.effect.ArrivalWatcher;
 import me.juancayc.polaroidhomes.effect.TeleportEffect;
 import net.ess3.api.events.UserTeleportHomeEvent;
 import net.ess3.api.events.teleport.PreTeleportEvent;
@@ -95,9 +96,9 @@ public final class TeleportListener implements Listener {
     /**
      * Fires the arrival effect.
      *
-     * <p>Scheduled for the next tick because this event fires immediately <em>before</em> the move:
-     * drawing at the destination now would draw it around a player who is still standing at the
-     * origin.
+     * <p>The arrival is watched for rather than scheduled: this event fires immediately
+     * <em>before</em> the move, and the move itself is not guaranteed to have happened by any
+     * particular tick.
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPreTeleport(PreTeleportEvent event) {
@@ -105,13 +106,10 @@ public final class TeleportListener implements Listener {
         if (player == null || pending.remove(player.getUniqueId()) == null) {
             return;
         }
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            if (!player.isOnline()) {
-                return;
-            }
-            Location destination = player.getLocation();
-            effect.playArrival(player, destination, config.arrival());
-        });
+        // Watched rather than scheduled for the next tick: a cross-world teleport has often not
+        // landed one tick after this event, and the arrival would then be drawn at the origin.
+        ArrivalWatcher.await(plugin, player, player.getLocation(),
+                (arrived, destination) -> effect.playArrival(arrived, destination, config.arrival()));
     }
 
     /** Drops a pending mark so a disconnect mid-warmup does not leak an entry forever. */

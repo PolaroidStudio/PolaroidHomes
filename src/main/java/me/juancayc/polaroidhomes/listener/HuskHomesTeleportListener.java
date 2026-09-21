@@ -1,6 +1,7 @@
 package me.juancayc.polaroidhomes.listener;
 
 import me.juancayc.polaroidhomes.config.PluginConfig;
+import me.juancayc.polaroidhomes.effect.ArrivalWatcher;
 import me.juancayc.polaroidhomes.effect.TeleportEffect;
 import net.william278.huskhomes.event.TeleportEvent;
 import net.william278.huskhomes.event.TeleportWarmupEvent;
@@ -73,9 +74,9 @@ public final class HuskHomesTeleportListener implements Listener {
     /**
      * Starts the departure effect for a teleport with no warmup, and fires the arrival effect.
      *
-     * <p>The arrival is scheduled for the next tick because this event fires immediately <em>before</em>
-     * the move, exactly as on the EssentialsX path: drawing at the destination now would draw it
-     * around a player who is still standing at the origin.
+     * <p>The arrival is watched for rather than scheduled: this event fires immediately
+     * <em>before</em> the move, and the move itself is not guaranteed to have happened by any
+     * particular tick.
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onTeleport(TeleportEvent event) {
@@ -92,11 +93,12 @@ public final class HuskHomesTeleportListener implements Listener {
         }
         decorating.remove(id);
 
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            if (player.isOnline()) {
-                effect.playArrival(player, player.getLocation(), config.arrival());
-            }
-        });
+        // Watched rather than scheduled for the next tick: HuskHomes carries the move out
+        // asynchronously and a cross-world teleport routinely has not landed a tick later, which
+        // drew the arrival around a player still standing at the origin — invisibly, on top of the
+        // departure effect just drawn there.
+        ArrivalWatcher.await(plugin, player, player.getLocation(),
+                (arrived, destination) -> effect.playArrival(arrived, destination, config.arrival()));
     }
 
     /**
